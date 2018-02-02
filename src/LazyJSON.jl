@@ -35,7 +35,7 @@ to normal Julia types is deferred until the values are accessed.
 e.g. an image_data.json file might contain hundreds of fields but if we
 only need to access the `width` and `height` fields, then there is no
 need to parse all the other fields. In fact if the end use of the `width`
-and `height` fields is to generate a html tag `"<img width=\$w height=\$h ...>"
+and `height` fields is to generate a html tag `"img width=\$w height=\$h ..."`
 there is no need to parse the numeric content of the strings at all.
 Similarity, we might extract some strings from a JSON source and write
 them to another JSON record as-is with no need to interpret escape
