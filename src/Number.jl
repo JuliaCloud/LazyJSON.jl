@@ -37,7 +37,6 @@ end
 
 
 Base.Number(n::JSON.Number) = convert(Base.Number, n)
-Base.Int(n::JSON.Number) = convert(Base.Int, n)
 Base.Int64(n::JSON.Number) = convert(Base.Int64, n)
 Base.Float64(n::JSON.Number) = convert(Base.Float64, n)
 
