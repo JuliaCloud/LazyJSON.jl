@@ -1,6 +1,12 @@
 using LazyJSON
 using Test
 
+module JSON_jl
+    using JSON
+end
+
+const JSONjl = JSON_jl.JSON
+
 const JSON = LazyJSON
 
 @testset "JSON" begin
@@ -26,7 +32,12 @@ rfc_example = """
     }
 """
 
+
+#-------------------------------------------------------------------------------
 @testset "RFC7159 example" begin
+#-------------------------------------------------------------------------------
+
+if JSON.wait_after_each_value
 
 v = JSON.parse(rfc_example)
 
@@ -81,7 +92,17 @@ x = v["Image"]["IDs"]
 @test length(v) == 1
 @test v.iscomplete
 
-end; @testset "RFC7159 example with trailing garbage" begin
+end
+
+end # testset
+
+
+
+#-------------------------------------------------------------------------------
+@testset "RFC7159 example with trailing garbage" begin
+#-------------------------------------------------------------------------------
+
+if JSON.wait_after_each_value
 
 v = JSON.parse("""{"Foo": $rfc_example, "Bar": garbage!""")
 @test sum(v["Foo"]["Image"]["IDs"]) == 40086
@@ -97,7 +118,36 @@ catch e
     """)
 end
 
-end; @testset "github.com/nst/JSONTestSuite" begin
+end
+
+end # testset
+
+
+
+#-------------------------------------------------------------------------------
+@testset "ec2-2016-11-15.normal.json" begin
+#-------------------------------------------------------------------------------
+
+j = String(read("ec2-2016-11-15.normal.json"))
+
+r = JSON.parse(j)
+@test r["operations"
+      ]["AcceptReservedInstancesExchangeQuote"
+      ]["input"
+      ]["shape"] |> String == "AcceptReservedInstancesExchangeQuoteRequest"
+
+@test r["shapes"
+      ]["scope"
+      ]["enum"
+      ][1] |> String == "Availability Zone"
+
+end # testset
+
+
+
+#-------------------------------------------------------------------------------
+@testset "github.com/nst/JSONTestSuite" begin
+#-------------------------------------------------------------------------------
 
     pending_unescape = [
         "n_string_1_surrogate_then_escape_u.json",
@@ -125,7 +175,7 @@ end; @testset "github.com/nst/JSONTestSuite" begin
 
     d = "JSONTestSuite/test_parsing"
     for f in readdir("JSONTestSuite/test_parsing")
-        println(f)
+        #println(f)
         class = f[1] 
         if class == 'y' || class == 'i'
             if f in i_not_passing
@@ -137,7 +187,7 @@ end; @testset "github.com/nst/JSONTestSuite" begin
             end
             @test JSON.iscomplete(r)
         end
-        if class == 'n'
+        if class == 'n' && JSON.enable_assertions
             if f in pending_unescape || f in passing_but_sloooow
                 continue
             end
@@ -156,6 +206,11 @@ end; @testset "github.com/nst/JSONTestSuite" begin
             end
         end
     end
-end
 
-end
+end # testset
+
+
+
+#-------------------------------------------------------------------------------
+end # top level testset JSON
+#-------------------------------------------------------------------------------

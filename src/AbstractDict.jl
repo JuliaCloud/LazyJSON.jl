@@ -7,10 +7,18 @@ function Base.get(o::JSON.Object, i::Int, d)
 end
 
 function Base.get(o::JSON.Object, key::AbstractString, default)
-    for (k, v) in o
-        if convert(SubString,k) == key
-            return v
+    keybytes = codeunits(key)
+    v = o.v
+    i = 1
+    while i < length(v) || !o.iscomplete
+        while i+1 > length(v)
+            parse_more!(o.parser)
         end
+        k = @inbounds(v[i])
+        if @inbounds(view(k.bytes, k.first:k.last)) == keybytes
+            return v[i+1]
+        end
+        i += 2
     end
     return default
 end

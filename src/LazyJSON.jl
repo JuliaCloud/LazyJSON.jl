@@ -118,26 +118,13 @@ parse(s::AbstractString) = Base.parse(JSON.Value, s)
 
 const Bytes = Base.CodeUnits{UInt8,Base.String}
 
-const enable_assertions = true
+const enable_assertions = false
+
+const wait_after_each_value = false
 
 
 
 # Parser Data Structures
-
-"""
-Fields:
- - `task`, runs `parse_value` function as a co-routine.
- - `result`, the top-level JSON value.
- - `error`, exception thrown by `parse_value`.
-"""
-
-mutable struct Parser
-    task::Task
-    result
-    error
-    Parser() = (p = new(); p.error = nothing; p)
-end
-
 
 """
 The JSON parser encountered invalid input.
@@ -169,11 +156,27 @@ end
 `JSON.Number` stores the start and end indexes of a number within a JSON text.
 """
 
-mutable struct Number <: Base.Number
+struct Number <: Base.Number
     bytes::Bytes
     first::Int
     last::Int
 end
+
+
+"""
+Fields:
+ - `task`, runs `parse_value` function as a co-routine.
+ - `result`, the top-level JSON value.
+ - `error`, exception thrown by `parse_value`.
+"""
+
+mutable struct Parser
+    task::Task
+    result
+    error
+    Parser() = (p = new(); p.error = nothing; p)
+end
+
 
 
 """
@@ -209,13 +212,13 @@ const use_promotejson = false
 
 else
 
-    getjson(v, i) = v[i]
+    getjson(v, i) = @inbounds(v[i])
 
 end
 
 promotejson(v) = v
-promotejson(v::String) = convert(SubString, v)
-promotejson(v::Number) = convert(Base.Number, v)
+promotejson(v::JSON.String) = convert(SubString, v)
+promotejson(v::JSON.Number) = convert(Base.Number, v)
 
 
 """
@@ -235,7 +238,7 @@ mutable struct Array <: AbstractArray{Any, 1}
     Array(p) = new(p, [], false)
 end
 
-Base.push!(a::Array, x) = (push!(a.v, x); wait()) # resumed by parse_more!
+Base.push!(a::Array, x) = (push!(a.v, x); wait_for_parse_more())
 
 
 """
@@ -258,26 +261,10 @@ mutable struct Object <: AbstractDict{AbstractString, Any}
     Object(p) = new(p, [], false)
 end
 
-Base.push!(a::Object, x) = (push!(a.v, x); wait()) # resumed by parse_more!
-
-
-"""
-    parse_value(p::Parser, string::Bytes, parent_value, index)
-
-Parse a [JSON value](https://tools.ietf.org/html/rfc7159#section-3) from a
-`string` of bytes starting at `index`. The parsed value is appended to the
-parent value (e.g. `push!(parent_value, parsed_value)`).
-
-The `parse_vector` contains parse functions indexed on ASCII character code.
-"""
-
-function parse_value(p::Parser, s::Bytes, l, v, i)
-    x = get_x(s, l, i)
-    i = parse_vector[1 + x](p, s, l, v, i)
-    i, x = skip_ws(s, l, i)
-    return i
+function Base.push!(o::Object, x)
+    push!(o.v, x)
+    wait_for_parse_more()
 end
-
 
 
 # JSON Parser
@@ -319,7 +306,7 @@ iscomplete(x::JSON.Array) = x.iscomplete
 function Base.push!(p::Parser, value)
     p.result = value                    # Store the result value and if parsing
     if !iscomplete(value)               # is incomplete, wait for the next
-        wait()                          # call to parse_more!().
+        wait_for_parse_more()           # call to parse_more!().
     end
 end
 
@@ -344,6 +331,12 @@ function parse_more!(collection, index)
 end
 
 parse_all!(c) = while !c.iscomplete parse_more!(c.parser) end
+
+@static if wait_after_each_value
+    wait_for_parse_more() = wait()
+else
+    wait_for_parse_more() = nothing
+end
 
 function check_end(p::Parser, s::Bytes, l, i)
     if !iscomplete(p.result)
@@ -402,12 +395,6 @@ function skip_ws(s, l, i)
         i, x = next_x(s, l, i)
     end
     return i, x
-end
-
-function parse_value_after_ws(p, s, l, v, i)
-    i, x = skip_ws(s, l, i)
-    i = parse_value(p, s, l, v, i)
-    return i
 end
 
 
@@ -561,7 +548,7 @@ function parse_number(p, s, l, v, i)
 
     i -= 1
     @assume '0':'9'
-    push!(v, Number(s, start, i))
+    push!(v, JSON.Number(s, start, i))
 
     return i + 1
 end
@@ -612,51 +599,49 @@ function parse_string(p, s, l, v, i)
     end
     @assume '"'
 
-    push!(v, String(s, start+1, i-1, has_escape))
+    push!(v, JSON.String(s, start+1, i-1, has_escape))
 
     return i + 1
 end
 
 
-parse_error(p, s, l, v, i) = throw(JSON.ParseError(s, i, "invalid input"))
-
-
 """
-Vector of parse functions indexed on ASCII character code.
+    parse_value(p::Parser, string::Bytes, parent_value, index)
+
+Parse a [JSON value](https://tools.ietf.org/html/rfc7159#section-3) from a
+`string` of bytes starting at `index`. The parsed value is appended to the
+parent value (e.g. `push!(parent_value, parsed_value)`).
 """
 
-const parse_vector = (()->begin
+function parse_value(p::Parser, s::Bytes, l, v, i)
 
-    v = Vector{Function}(fill(parse_error::Function, typemax(UInt8) + 1))
+    i, x = skip_ws(s, l, i)
 
-    v[1 + UInt8(' ')]  = parse_value_after_ws
-    v[1 + UInt8('\t')] = parse_value_after_ws
-    v[1 + UInt8('\r')] = parse_value_after_ws
-    v[1 + UInt8('\n')] = parse_value_after_ws
-
-    v[1 + UInt8('f')]  = parse_false
-    v[1 + UInt8('n')]  = parse_null
-    v[1 + UInt8('t')]  = parse_true
-
-    v[1 + UInt8('{')]  = parse_object
-    v[1 + UInt8('[')]  = parse_array
-    v[1 + UInt8('"')]  = parse_string
-
-    for x in ('-', '0':'9'...)
-        v[1 + UInt8(x)] = parse_number
+    i = if x == UInt8('f')                       parse_false(p, s, l, v, i)
+    elseif x == UInt8('n')                        parse_null(p, s, l, v, i)
+    elseif x == UInt8('t')                        parse_true(p, s, l, v, i)
+    elseif x == UInt8('{')                      parse_object(p, s, l, v, i)
+    elseif x == UInt8('[')                       parse_array(p, s, l, v, i)
+    elseif x == UInt8('"')                      parse_string(p, s, l, v, i)
+    elseif x >= UInt8('0')  &&
+           x <= UInt8('9')  ||
+           x == UInt8('-')                      parse_number(p, s, l, v, i)
+    else
+        throw(JSON.ParseError(s, i, "invalid input"))
     end
-    
-    return v
-end)()
+
+    i, x = skip_ws(s, l, i)
+    return i
+end
 
 
 
 # Message Display
 
-Base.show(io::IO, s::String) =
+Base.show(io::IO, s::JSON.String) =
     print(io, SubString(s.bytes.s, s.first-1, s.last+1))
 
-Base.show(io::IO, n::Number) = print(io, string(n))
+Base.show(io::IO, n::JSON.Number) = print(io, string(n))
 
 function Base.show(io::IO, e::JSON.ParseError)
 
