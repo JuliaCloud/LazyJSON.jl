@@ -101,7 +101,7 @@ real-world testing or performance measurement has been done yet.
 The `test/benchmark.jl` test uses a [1MB AWS API definition JSON file](https://github.com/samoconnor/jsonhack/blob/master/test/ec2-2016-11-15.normal.json)
 to compare performance to JSON.jl.  When accessing a value close to the
 start of the file the lazy parser takes ~1ms vs ~300ms for JSON.jl.
-When accessing a value close to the end of the file lazy json takes ~265ms
+When accessing a value close to the end of the file the lazy parser takes ~265ms
 vs 300ms for JSON.jl.
 
 
