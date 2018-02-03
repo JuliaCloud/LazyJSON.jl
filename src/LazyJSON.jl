@@ -120,8 +120,6 @@ const Bytes = Base.CodeUnits{UInt8,Base.String}
 
 const enable_assertions = false
 
-const wait_after_each_value = false
-
 
 
 # Parser Data Structures
@@ -174,9 +172,9 @@ mutable struct Parser
     task::Task
     result
     error
-    Parser() = (p = new(); p.error = nothing; p)
+    wait_count::Int
+    Parser() = (p = new(); p.error = nothing; p.wait_count = 0; p)
 end
-
 
 
 """
@@ -238,7 +236,7 @@ mutable struct Array <: AbstractArray{Any, 1}
     Array(p) = new(p, [], false)
 end
 
-Base.push!(a::Array, x) = (push!(a.v, x); wait_for_parse_more())
+Base.push!(a::Array, x) = (push!(a.v, x); wait_for_parse_more(a.parser))
 
 
 """
@@ -263,7 +261,7 @@ end
 
 function Base.push!(o::Object, x)
     push!(o.v, x)
-    wait_for_parse_more()
+    wait_for_parse_more(o.parser)
 end
 
 
@@ -306,7 +304,7 @@ iscomplete(x::JSON.Array) = x.iscomplete
 function Base.push!(p::Parser, value)
     p.result = value                    # Store the result value and if parsing
     if !iscomplete(value)               # is incomplete, wait for the next
-        wait_for_parse_more()           # call to parse_more!().
+        wait_for_parse_more(p)          # call to parse_more!().
     end
 end
 
@@ -332,10 +330,12 @@ end
 
 parse_all!(c) = while !c.iscomplete parse_more!(c.parser) end
 
-@static if wait_after_each_value
-    wait_for_parse_more() = wait()
-else
-    wait_for_parse_more() = nothing
+function wait_for_parse_more(p)
+    p.wait_count += 1
+    if p.wait_count > 100               # Keep parsing for a while before
+        p.wait_count = 0                # yeilding control back to the main
+        wait()                          # task to avoid task switching overhead.
+    end
 end
 
 function check_end(p::Parser, s::Bytes, l, i)

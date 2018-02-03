@@ -6,7 +6,7 @@ function go()
 j = String(read("ec2-2016-11-15.normal.json"))
 
 
-for n in [1, 100]
+for n in [1, 50]
 
 n > 1 && println("Access value close to start:")
 n > 1 && print("LazyJSON.jl: ")
