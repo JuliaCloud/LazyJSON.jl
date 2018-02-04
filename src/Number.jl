@@ -48,6 +48,9 @@ import Base: +, -, *, /, ^
 /(a::T, b::T) where {T <: JSON.Number} = promotejson(a) / promotejson(b)
 ^(a::T, b::T) where {T <: JSON.Number} = promotejson(a) ^ promotejson(b)
 
+Base.isless(a::Base.Number, b::JSON.Number) = isless(a, convert(Base.Number, b))
+Base.isless(a::JSON.Number, b::Base.Number) = isless(convert(Base.Number, a), b)
+
 
 Base.promote_rule(::Type{T}, ::Type{JSON.Number}) where T <: Integer = Int64
 Base.promote_rule(::Type{T}, ::Type{JSON.Number}) where T <: AbstractFloat = Float64
