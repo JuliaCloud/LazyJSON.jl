@@ -99,9 +99,9 @@ The test cases cover https://github.com/nst/JSONTestSuite, but no
 real-world testing or performance measurement has been done yet.
 
 The `test/benchmark.jl` test uses a [1MB AWS API definition JSON file](https://github.com/samoconnor/jsonhack/blob/master/test/ec2-2016-11-15.normal.json)
-to compare performance to JSON.jl.  When accessing a value close to the
+to compare performance vs JSON.jl.  When accessing a value close to the
 start of the file the lazy parser is ~1000 times faster than JSON.jl,
-for a value near then end of the file, the lazy parser is ~2 time faster.
+for a value near then end of the file, the lazy parser is ~2 times faster.
 
 ```
 Access value close to start:
