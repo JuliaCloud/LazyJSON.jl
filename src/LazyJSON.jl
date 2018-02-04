@@ -23,6 +23,9 @@ const enable_assertions = false
 
 const disable_coroutine = false
 
+const wait_after_each_value = false
+
+
 
 # Parser Data Structures
 
@@ -240,16 +243,19 @@ end
 
 parse_all!(c) = while !c.iscomplete parse_more!(c.parser) end
 
-@static if disable_coroutine
-wait_for_parse_more(p) = nothing
-else
 function wait_for_parse_more(p)
-    p.wait_count += 1
-    if p.wait_count > 100               # Keep parsing for a while before
-        p.wait_count = 0                # yeilding control back to the main
-        wait()                          # task to avoid task switching overhead.
+    @static if disable_coroutine
+        return
     end
-end
+    @static if wait_after_each_value
+        wait()
+    else
+        p.wait_count += 1
+        if p.wait_count > 100           # Keep parsing for a while before
+            p.wait_count = 0            # yeilding control back to the main
+            wait()                      # task to avoid task switching overhead.
+        end
+    end
 end
 
 function check_end(p::Parser, s::Bytes, l, i)
