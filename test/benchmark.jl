@@ -6,10 +6,22 @@ function go()
 j = String(read("ec2-2016-11-15.normal.json"))
 
 
-for n in [1, 50]
+for n in [1, 190]
 
+println("\n")
 n > 1 && println("Access value close to start:")
-n > 1 && print("LazyJSON.jl: ")
+
+n > 1 && print("LazyJSON.jl with path:")
+GC.gc()
+@time for i in 1:n
+    r = LazyJSON.parse(j; path = ["operations",
+                                  "AcceptReservedInstancesExchangeQuote",
+                                  "input",
+                                  "shape"])
+    @assert r |> String == "AcceptReservedInstancesExchangeQuoteRequest"
+end
+
+n > 1 && print("LazyJSON.jl:          ")
 GC.gc()
 @time for i in 1:n
     r = LazyJSON.parse(j)
@@ -19,7 +31,7 @@ GC.gc()
             ]["shape"] |> String == "AcceptReservedInstancesExchangeQuoteRequest"
 end
 
-n > 1 && print("JSON.jl:      ")
+n > 1 && print("JSON.jl:              ")
 GC.gc()
 @time for i in 1:n
     r = JSON.parse(j)
@@ -29,8 +41,17 @@ GC.gc()
             ]["shape"] |> String == "AcceptReservedInstancesExchangeQuoteRequest"
 end
 
+println("\n")
 n > 1 && println("Access value close to end:")
-n > 1 && print("LazyJSON.jl: ")
+
+n > 1 && print("LazyJSON.jl with path:")
+GC.gc()
+@time for i in 1:n
+    r = LazyJSON.parse(j; path = ["shapes", "scope", "enum", 1])
+    @assert r |> String == "Availability Zone"
+end
+
+n > 1 && print("LazyJSON.jl:          ")
 GC.gc()
 @time for i in 1:n
     r = LazyJSON.parse(j)
@@ -40,7 +61,7 @@ GC.gc()
             ][1] |> String == "Availability Zone"
 end
 
-n > 1 && print("JSON.jl:      ")
+n > 1 && print("JSON.jl:              ")
 GC.gc()
 @time for i in 1:n
     r = JSON.parse(j)

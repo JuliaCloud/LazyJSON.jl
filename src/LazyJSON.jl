@@ -1,111 +1,7 @@
 """
 LazyJSON.jl
 
-This is an experimental lazy JSON parser. It attempts to parse JSON
-with minimal allocation of buffers; it delays parsing until values
-are requested through the `AbstractArray` and `AbstractDict`
-interfaces; and it does not interpret the content of string or
-numeric values until they are requested through the `AbstractString`
-and `Number` interfaces.
-
-The motivation for tying this began with a JSON file from a JavaScript
-system that was rejected by JSON.jl.
-https://github.com/JuliaIO/JSON.jl/issues/232#issuecomment-359675596
-
-The issue was the presence of \\uXXXX string sequences that did not
-produce valid unicode characters. The file contained a test suite
-for URI parsing. The intention was to feed the "invalid" \\uXXXX
-sequences into a URI parser to test for proper error handling. There
-was no intention to attempt to render the "invalid" sequences as
-characters, so it seemed unfortunate that JSON.jl rejected them as
-being bad characters. It also seemed unfortunate that the entire JSON
-file was rejected due to a few characters in a few strings.
-
-Thinking about a better way to handle this situation led to the
-idea that it might be better for the parser not to try to interpret
-characters at all, and that it might be nice to be able to access a few
-fields in a large file without having to validate every aspect of the
-entire file.
-
-Rather than eagerly converting every detail of the JSON format to Julia
-types, the output of this lazy parser consists of byte indexes that
-refer to the location of string and numeric values within the JSON text.
-Interpretation of the content of the strings and numbers and conversion
-to normal Julia types is deferred until the values are accessed.
-e.g. an image_data.json file might contain hundreds of fields but if we
-only need to access the `width` and `height` fields, then there is no
-need to parse all the other fields. In fact if the end use of the `width`
-and `height` fields is to generate a html tag `"img width=\$w height=\$h ..."`
-there is no need to parse the numeric content of the strings at all.
-Similarity, we might extract some strings from a JSON source and write
-them to another JSON record as-is with no need to interpret escape
-sequences or care if the characters are "valid".
-
-```
-┌───────────────────────────────┐                               ┌───────────┐
-│ JSON.String <: AbstractString │                               │ SubString │
-│  bytes::CodeUnits             ├─────────────────────────────▶ └───────────┘
-│  first::Int                   │     convert, unescape,        ┌───────────┐
-│  last::Int                    │    constructors etc...        │ String    │
-└───────────────────────────────┘                               └───────────┘
-┌───────────────────────────────┐                               ┌───────────┐
-│ JSON.Number <: Number         │                               │ Int64     │
-│  bytes::CodeUnits             ├─────────────────────────────▶ └───────────┘
-│  first::Int                   │   convert, promote_rule,      ┌───────────┐
-│  last::Int                    │   +, -, *, /, ^, etc...       │ Float64   │
-└───────────────────────────────┘                               └───────────┘
-```
-
-
-The Array and Object collection types are implemented as flat vectors
-wrapped with AbstractArray and AbstractDict interfaces. When a JSON
-file containing an Array of values is processed the parser stops
-and returns and empty array object as soon as it sees the '[`' at
-the start of the input.  As the user requests particular values in
-the array, the parser processes just enough to return the requested
-values. The same pattern of just in time parsing applies recursively
-to nested Objects and Arrays.
-
-```
-┌───────────────────────────────┐
-│ JSON.Array <: AbstractArray   │                               ┌───────────┐
-│  v::Vector{Any}               ├─────────────────────────────▶ │ Array     │
-│  iscomplete{Bool}             │       length, getindex,       └───────────┘
-│                               │   start, done, next, etc...
-└───────────────────────────────┘
-┌───────────────────────────────┐                               ┌───────────┐
-│ JSON.Object <: AbstractDict   │                               │ Dict      │
-│  v::Vector{Any}               ├─────────────────────────────▶ └───────────┘
-│  iscomplete{Bool}             │      keys, length, get,       ┌───────────┐
-│                               │   start, done, next, etc...   │ Pairs     │
-└───────────────────────────────┘                               └───────────┘
-```
-
-
-The main `parse_value` function runs as a co-routine. Whenever it
-finishes parsing a value-fragment it yields control back to the
-main application task and waits. When some application code calls
-`getindex(::JSON.Array, ::Int)` the `parse_value` co-routine is
-resumed until the value at the requested index has been parsed.
-
-The `use_promotejson::Bool` setting enables optional caching of values
-that have been promoted to normal Julia types as they are accessed.
-
-The `enable_assertions::Bool` setting controls checks that are not
-necessary if the input is known to be valid JSON.
-
-The test cases cover https://github.com/nst/JSONTestSuite, but no
-real-world testing or performance measurement has been done yet.
-
-TODO:
- - Performance measurement and tuning
- - Large input test cases
- - Implement the AbstractString interface for JSON.String
- - Implement un-escaping
-
-See also:
- - Another lazy JSON parser: https://github.com/doubledutch/LazyJSON
- - RFC 7159: https://tools.ietf.org/html/rfc7159
+See README.md
 """
 
 module LazyJSON
@@ -114,12 +10,18 @@ const JSON = LazyJSON
 
 abstract type Value end
 
-parse(s::AbstractString) = Base.parse(JSON.Value, s)
+const Key = Union{Int, Base.CodeUnits{UInt8,Base.String}}
+
+parse(s::AbstractString; path=[]) = Base.parse(JSON.Value, s;
+                                               path=mkpath(path))
+
+mkpath(p) = Key[x isa AbstractString ? codeunits(x) : x for x in p]
 
 const Bytes = Base.CodeUnits{UInt8,Base.String}
 
 const enable_assertions = false
 
+const disable_coroutine = false
 
 
 # Parser Data Structures
@@ -236,7 +138,7 @@ mutable struct Array <: AbstractArray{Any, 1}
     Array(p) = new(p, [], false)
 end
 
-Base.push!(a::Array, x) = (push!(a.v, x); wait_for_parse_more(a.parser))
+Base.push!(a::JSON.Array, x) = (push!(a.v, x); wait_for_parse_more(a.parser))
 
 
 """
@@ -271,7 +173,7 @@ end
 Parse JSON text.
 
 Returns a `Bool`, `Number`, `AbstractString`, `AbstractArray`, `AbstractDict` or
-`Void`.
+`Nothing`.
 
 The parser runs in a lazy co-routine. If the returned value is a collection
 type it will be incomplete. Each call to `parse_more!(::Parser)` causes another
@@ -281,17 +183,23 @@ interface methods.
 """
 
 function Base.parse(::Type{JSON.Value},
-                    as::AbstractString)
+                    as::AbstractString;
+                    path::Vector{Key}=[])
     s = codeunits(as)                   # Convert string to byte-vector
     l = length(s)
     p = Parser()                        # Run parse_value() as a co-routine.
+    v = isempty(path) ? p : path
+    @static if disable_coroutine
+    parse_value(p, s, l, v, 1)
+    else
     p.task = @task try                  # Pass the parser as the parent value
-        i = parse_value(p, s, l, p, 1)  # and start at index 1.
+        i = parse_value(p, s, l, v, 1)  # and start at index 1.
         if enable_assertions
             check_end(p, s, l, i)
         end
     catch e                             # Capturue parse errors to be rethrown
         p.error = e                     # in the main task by parse_more()
+    end
     end
     parse_more!(p)                      # Ensure that the top level JSON value
     return p.result                     # is push!-ed into p.result.
@@ -302,12 +210,13 @@ iscomplete(x::JSON.Object) = x.iscomplete
 iscomplete(x::JSON.Array) = x.iscomplete
 
 function Base.push!(p::Parser, value)
-    p.result = value                    # Store the result value and if parsing
-    if !iscomplete(value)               # is incomplete, wait for the next
-        wait_for_parse_more(p)          # call to parse_more!().
-    end
+    p.result = value                    # Store the result value and wait for
+    disable_coroutine || wait()         # the next call to parse_more!().
 end
 
+@static if disable_coroutine
+parse_more!(p::Parser) = nothing
+else
 function parse_more!(p::Parser)
     if p.error != nothing               # Don't try to parse more if the last
         throw(p.error)                  # call resulted in an error.
@@ -320,6 +229,7 @@ function parse_more!(p::Parser)
         throw(p.error)                  # parse_value() co-routine.
     end
 end
+end
 
 function parse_more!(collection, index)
     while !collection.iscomplete &&     # Keep parsing until a specified index
@@ -330,12 +240,16 @@ end
 
 parse_all!(c) = while !c.iscomplete parse_more!(c.parser) end
 
+@static if disable_coroutine
+wait_for_parse_more(p) = nothing
+else
 function wait_for_parse_more(p)
     p.wait_count += 1
     if p.wait_count > 100               # Keep parsing for a while before
         p.wait_count = 0                # yeilding control back to the main
         wait()                          # task to avoid task switching overhead.
     end
+end
 end
 
 function check_end(p::Parser, s::Bytes, l, i)
@@ -347,7 +261,7 @@ function check_end(p::Parser, s::Bytes, l, i)
         if i <= l && !isws(x)
             throw(JSON.ParseError(s, i, "'$(Char(x))' after end of input"))
         end
-    end 
+    end
 end
 
 
@@ -412,9 +326,9 @@ https://tools.ietf.org/html/rfc7159#section-3
       true  = %x74.72.75.65      ; true
 """
 
-parse_false(p, s, l, v, i) = (push!(v, false);   i + 5)
-parse_null(p, s, l, v, i)  = (push!(v, nothing); i + 4)
-parse_true(p, s, l, v, i)  = (push!(v, true);    i + 4)
+parse_false(p, s, l, v, i) = (v != nothing && push!(v, false);   i + 5)
+parse_null(p, s, l, v, i)  = (v != nothing && push!(v, nothing); i + 4)
+parse_true(p, s, l, v, i)  = (v != nothing && push!(v, true);    i + 4)
 
 
 """
@@ -430,8 +344,23 @@ https://tools.ietf.org/html/rfc7159#section-4
 
 function parse_object(p, s, l, v, i)
 
-    o = Object(p)
-    push!(v, o)
+    if v isa AbstractVector{Key}
+        key = v[1]
+        if key isa Base.CodeUnits
+            vl = length(v)
+            path = vl > 1 ? view(v, 2:vl) : p
+        else
+            key = nothing
+        end
+    else
+        key = nothing
+    end
+    if v == nothing || v isa AbstractVector{Key}
+        o = nothing
+    else
+        o = Object(p)
+        push!(v, o)
+    end
 
     @assume '{'
     i += 1
@@ -439,13 +368,14 @@ function parse_object(p, s, l, v, i)
     while x != UInt8('}')
 
         i, x = skip_ws(s, l, i)
+        k = i
         i = parse_string(p, s, l, o, i)
+        oo = key != nothing && view(s, k+1:i-2) == key ? path : o
         i, x = skip_ws(s, l, i)
-
         @assume ':'
         i += 1
 
-        i = parse_value(p, s, l, o, i)
+        i = parse_value(p, s, l, oo, i)
         x = get_x(s, l, i)
         if x == UInt8(',')
             i += 1
@@ -454,7 +384,9 @@ function parse_object(p, s, l, v, i)
         end
     end
 
-    o.iscomplete = true
+    if o isa Object
+        o.iscomplete = true
+    end
 
     return i + 1
 end
@@ -470,23 +402,43 @@ https://tools.ietf.org/html/rfc7159#section-5
 
 function parse_array(p, s, l, v, i)
 
-    a = Array(p)
-    push!(v, a)
+    if v isa AbstractVector{Key}
+        key = v[1]
+        if key isa Int
+            vl = length(v)
+            path = vl > 1 ? view(v, 2:vl) : p
+        else
+            key = 0
+        end
+    else
+        key = 0
+    end
+    if v == nothing || v isa AbstractVector{Key}
+        a = nothing
+    else
+        a = JSON.Array(p)
+        push!(v, a)
+    end
 
     @assume '['
     i += 1
     i, x = skip_ws(s, l, i)
+    count = 1
     while x != UInt8(']')
-        i = parse_value(p, s, l, a, i)
+        aa = key != 0 && count == key ? path : a
+        i = parse_value(p, s, l, aa, i)
         x = get_x(s, l, i)
         if x == UInt8(',')
             i += 1
         else
             @assume ']'
         end
+        count += 1
     end
 
-    a.iscomplete = true
+    if a isa JSON.Array
+        a.iscomplete = true
+    end
 
     return i + 1
 end
@@ -523,7 +475,7 @@ function parse_number(p, s, l, v, i)
 
     start = i
 
-    x = @inbounds(s[i]) 
+    x = @inbounds(s[i])
     if x == UInt8('-')
         i, x = next_x(s, l, i)
     end
@@ -548,7 +500,9 @@ function parse_number(p, s, l, v, i)
 
     i -= 1
     @assume '0':'9'
-    push!(v, JSON.Number(s, start, i))
+    if v != nothing
+        push!(v, JSON.Number(s, start, i))
+    end
 
     return i + 1
 end
@@ -599,7 +553,9 @@ function parse_string(p, s, l, v, i)
     end
     @assume '"'
 
-    push!(v, JSON.String(s, start+1, i-1, has_escape))
+    if v != nothing
+        push!(v, JSON.String(s, start+1, i-1, has_escape))
+    end
 
     return i + 1
 end
@@ -653,7 +609,7 @@ function Base.show(io::IO, e::JSON.ParseError)
     l = min(length(s), l)
     line_number = length(split(SubString(s, 1, l), '\n'))
     col_number = e.index - l + 1
-    print(io, "JSON.ParseError: ", e.message, 
+    print(io, "JSON.ParseError: ", e.message,
               " at line ", line_number, ", col ", col_number, "\n",
               SubString(s, l, r), "\n",
               lpad("", col_number - 1, " "), "^")

@@ -100,16 +100,32 @@ real-world testing or performance measurement has been done yet.
 
 The `test/benchmark.jl` test uses a [1MB AWS API definition JSON file](https://github.com/samoconnor/jsonhack/blob/master/test/ec2-2016-11-15.normal.json)
 to compare performance to JSON.jl.  When accessing a value close to the
-start of the file the lazy parser takes ~1ms vs ~300ms for JSON.jl.
-When accessing a value close to the end of the file the lazy parser takes ~265ms
-vs 300ms for JSON.jl.
+start of the file the lazy parser is ~1000 times faster than JSON.jl,
+for a value near then end of the file, the lazy parser is ~2 time faster.
 
+```
+Access value close to start:
+LazyJSON.jl with path:  0.001051 seconds (7.03 k allocations: 982.656 KiB)
+LazyJSON.jl:            0.002873 seconds (36.48 k allocations: 2.508 MiB)
+JSON.jl:                0.996974 seconds (9.34 M allocations: 913.682 MiB, 12.38% gc time)
+
+
+Access value close to end:
+LazyJSON.jl with path:  0.450964 seconds (196.46 k allocations: 9.605 MiB)
+LazyJSON.jl:            0.893084 seconds (9.79 M allocations: 483.524 MiB, 8.23% gc time)
+JSON.jl:                0.994393 seconds (9.34 M allocations: 913.682 MiB, 12.79% gc time)
+```
 
 TODO:
+ - path= kw option implementation is a nasty hack, needs cleanup
  - Performance measurement and tuning
  - Large input test cases
  - Implement the AbstractString interface for JSON.String
  - Implement un-escaping
+ - Consider how un-escaping relates to object field name matching.
+   If the ket to be matched can be translated to a normalised escaped form
+   then we won't need to un-escape all the field names (only the ones that
+   are in a non-normal escaped form).
 
 See also:
  - Another lazy JSON parser: https://github.com/doubledutch/LazyJSON
