@@ -116,6 +116,23 @@ LazyJSON.jl:            0.893084 seconds (9.79 M allocations: 483.524 MiB, 8.23%
 JSON.jl:                0.994393 seconds (9.34 M allocations: 913.682 MiB, 12.79% gc time)
 ```
 
+
+The `test/benchmark_geo.jl` test uses a 1.2MB GeoJSON file
+to compare performance vs JSON.jl. The first test extracts a country name 
+near the middle of the file. The second test checks that the country outline
+polygon is at the expected coordinates.
+
+```
+Country name
+LazyJSON.jl:  0.011174 seconds (1.06 k allocations: 112.516 KiB)
+JSON.jl:      1.067171 seconds (8.62 M allocations: 373.471 MiB, 9.21% gc time)
+
+Map data
+LazyJSON.jl:  0.086771 seconds (7.64 k allocations: 371.391 KiB)
+JSON.jl:      1.033109 seconds (8.62 M allocations: 373.541 MiB, 9.13% gc time)
+```
+
+
 TODO:
  - path= kw option implementation is a nasty hack, needs cleanup
  - Performance measurement and tuning
