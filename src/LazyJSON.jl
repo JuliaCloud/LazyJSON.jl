@@ -34,7 +34,7 @@ The JSON parser encountered invalid input.
 """
 
 struct ParseError <: Exception
-    bytes::Bytes
+    bytes::Base.String
     index::Int
     message::Base.String
 end
@@ -189,7 +189,7 @@ function Base.parse(::Type{JSON.Value},
                     as::AbstractString;
                     path::Vector{Key}=[])
     s = codeunits(as)                   # Convert string to byte-vector
-    l = length(s)
+    l = sizeof(s)
     p = Parser()                        # Run parse_value() as a co-routine.
     v = isempty(path) ? p : path
     @static if disable_coroutine
@@ -260,12 +260,12 @@ end
 
 function check_end(p::Parser, s::Bytes, l, i)
     if !iscomplete(p.result)
-        throw(JSON.ParseError(s, i, "unexpected end of input"))
+        throw(JSON.ParseError(s.s, i, "unexpected end of input"))
     end
     if i <= l
         i, x = skip_ws(s, l, i)
         if i <= l && !isws(x)
-            throw(JSON.ParseError(s, i, "'$(Char(x))' after end of input"))
+            throw(JSON.ParseError(s.s, i, "'$(Char(x))' after end of input"))
         end
     end
 end
@@ -281,8 +281,8 @@ macro assume(x)
     end
     s = typeof(x) == Char ? "'$x'" : string(x)
     esc(quote
-        if i > length(s) || !(s[i] in UInt8[($x)...])
-            throw(JSON.ParseError(s, i, "expected $($s)"))
+        if i > sizeof(s) || !(s[i] in UInt8[($x)...])
+            throw(JSON.ParseError(s.s, i, "expected $($s)"))
         end
     end)
 end
@@ -579,17 +579,17 @@ function parse_value(p::Parser, s::Bytes, l, v, i)
 
     i, x = skip_ws(s, l, i)
 
-    i = if x == UInt8('f')                       parse_false(p, s, l, v, i)
-    elseif x == UInt8('n')                        parse_null(p, s, l, v, i)
-    elseif x == UInt8('t')                        parse_true(p, s, l, v, i)
-    elseif x == UInt8('{')                      parse_object(p, s, l, v, i)
+    i = if x == UInt8('{')                      parse_object(p, s, l, v, i)
     elseif x == UInt8('[')                       parse_array(p, s, l, v, i)
     elseif x == UInt8('"')                      parse_string(p, s, l, v, i)
     elseif x >= UInt8('0')  &&
            x <= UInt8('9')  ||
            x == UInt8('-')                      parse_number(p, s, l, v, i)
+    elseif x == UInt8('f')                       parse_false(p, s, l, v, i)
+    elseif x == UInt8('n')                        parse_null(p, s, l, v, i)
+    elseif x == UInt8('t')                        parse_true(p, s, l, v, i)
     else
-        throw(JSON.ParseError(s, i, "invalid input"))
+        throw(JSON.ParseError(s.s, i, "invalid input"))
     end
 
     i, x = skip_ws(s, l, i)
@@ -607,7 +607,7 @@ Base.show(io::IO, n::JSON.Number) = print(io, string(n))
 
 function Base.show(io::IO, e::JSON.ParseError)
 
-    s = Base.String(e.bytes)
+    s = e.bytes
     l = findprev(equalto('\n'), s, e.index)
     l = l != nothing ? l + 1 : 1
     r = findnext(equalto('\n'), s, max(1, e.index-1))
@@ -625,7 +625,8 @@ include("AbstractString.jl")
 include("Number.jl")
 include("AbstractArray.jl")
 include("AbstractDict.jl")
+include("LazyerJSON.jl")
 
-
+using .LazyerJSON
 
 end # module JSON
