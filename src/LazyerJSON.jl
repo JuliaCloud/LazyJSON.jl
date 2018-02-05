@@ -1,88 +1,76 @@
 module LazyerJSON
 
+const JSON = LazyerJSON
+
 import ..ParseError
+
+
+# Byte Wrangling Utilities
 
 # Allow comparison of UInt8 with Char (e.g. c == '{')
 ==(a, b) = Base.isequal(a, b)
 !=(a, b) = !(a == b)
 ==(i::T, c::Char) where T <: Integer = Base.isequal(i, T(c))
-in(a, b) = Base.in(a, b)
-in(a::T, b::StepRange{Char,S}) where {S, T <: Integer} =
-    Base.in(a, StepRange{T, S}(b))
 
-
-# Check for null terminator.
-# jl_alloc_string allocates n + 1 bytes and sets the last byte to 0x00
-# https://github.com/JuliaLang/julia/blob/master/src/array.c#L464
-ischar(c) = c != 0x00
-
-isws(x) = x == ' '  ||
-          x == '\t' ||
-          x == '\r' ||
-          x == '\n'
-
-isnum(c) = c == '-' ||
-           c in '0':'9'
-
-
-const LazyIndex = Int32
 
 # Access bytes of string without bounds checking
-getc(s, i) = unsafe_load(pointer(s, i))
-
-nexti(i, n=LazyIndex(1)) = i += LazyIndex(n)
-
-nextc(s, i) = (i = nexti(i); (i, getc(s, i)))
-
-function skip_ws(s, i=LazyIndex(1))
-    c = getc(s, i)
-    while isws(c)
-        i, c = nextc(s, i)
-    end
-    return i, c
+macro getc(s, i)
+    esc(:(unsafe_load(pointer($s), $i)))
 end
 
-function skip_delim(s, i)
-    c = getc(s, i)
-    while (isws(c) || c == ',' || c == ':')
-        i, c = nextc(s, i)
-    end
-    return i, c
+macro next_ic(s, i, c)
+    esc(quote
+        $i += 1
+        $c = @getc($s, $i)
+    end)
 end
 
-abstract type LazyerCollection end
 
-const LazyerInput = Union{String,SubString{String}}
 
-struct LazyerString{T}
+# JSON Value Types
+# Represented by a string and a byte index.
+
+struct String{T}
     s::T
-    i::LazyIndex 
+    i::Int 
 end
 
-struct LazyerNumber{T}
+struct Number{T}
     s::T
-    i::LazyIndex 
+    i::Int 
 end
 
-struct LazyerObject{T} <: LazyerCollection
+struct Object{T}
     s::T
-    i::LazyIndex 
+    i::Int 
 end
 
-struct LazyerArray{T} <: LazyerCollection
+struct Array{T}
     s::T
-    i::LazyIndex 
+    i::Int 
+
 end
 
-Base.string(s::LazyerCollection) = SubString(s.s, s.i)
-Base.string(s::LazyerString) = SubString(s.s, s.i, lazyer_string(s.s, s.i))
-Base.string(s::LazyerNumber) = SubString(s.s, s.i, lazyer_number(s.s, s.i))
+const Collection = Union{JSON.Object, JSON.Array}
 
-function lazyer_get(s, i, c=getc(s, i))
-        if c == '{'                     LazyerObject(s, i)
-    elseif c == '['                     LazyerArray(s, i)
-    elseif c == '"'                     LazyerString(s, i)
-    elseif isnum(c)                     LazyerNumber(s, i)
+
+Base.string(s::JSON.Collection) = SubString(s.s, s.i)
+Base.string(s::JSON.String) = SubString(s.s, s.i, find_end_of_string(s.s, s.i))
+Base.string(s::JSON.Number) = SubString(s.s, s.i, find_end_of_number(s.s, s.i))
+
+
+
+"""
+Get a JSON value object for a value in a JSON text.
+ - `i`, byte index of the value in JSON text.
+ - `c`, first byte of the value.
+"""
+
+function getvalue(s, i, c=@getc(s, i))
+        if c == '{'                     JSON.Object(s, i)
+    elseif c == '['                     JSON.Array(s, i)
+    elseif c == '"'                     JSON.String(s, i)
+    elseif isnum(c)                     JSON.Number(s, i)
     elseif c == 'f'                     false
     elseif c == 'n'                     nothing
     elseif c == 't'                     true
@@ -94,21 +82,27 @@ function lazyer_get(s, i, c=getc(s, i))
 end
 
 
-Base.IteratorSize(::Type{LazyerObject{T}}) where T = Base.SizeUnknown()
-Base.IteratorSize(::Type{LazyerArray{T}}) where T = Base.SizeUnknown()
 
-Base.start(j::LazyerCollection) = (LazyIndex[], j.i, getc(j.s, j.i))
-Base.done(j::LazyerCollection, (k, i, c)) = (c == ']' || c == '}')
-function Base.next(j::LazyerCollection, (k, i, c))
-    k, i, c = lazyer(j.s, k, i, c)
-    while length(k) > 1
-        k, i, c = lazyer(j.s, k, i, c)
+# JSON Object/Array Iterator
+
+Base.start(j::JSON.Collection) = (0, j.i, @getc(j.s, j.i))
+Base.done(j::JSON.Collection, (nest, i, c)) = (c == ']' || c == '}')
+function Base.next(j::JSON.Collection, (nest, i, c))
+    nest, i, c = next_token(j.s, nest, i, c)
+    while nest > 1
+        nest, i, c = next_token(j.s, nest, i, c)
     end
-    return (i, c), (k, i, c)
+    return (i, c), (nest, i, c)
 end
 
+Base.IteratorSize(::Type{JSON.Object{T}}) where T = Base.SizeUnknown()
+Base.IteratorSize(::Type{JSON.Array{T}}) where T = Base.SizeUnknown()
 
-function Base.getindex(a::LazyerArray, n::Int)
+
+
+# JSON Array Lookup
+
+function Base.getindex(a::JSON.Array, n::Int)
     for (i, c) in a
         if c == ']'
            throw(BoundsError(a, n))
@@ -121,17 +115,20 @@ function Base.getindex(a::LazyerArray, n::Int)
 end
 
 
+
+# JSON Object Field Name Lookup
+
 memcmp(a, b, l) = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, l)
 
 function keycmp(keyp, keyl, s, l, i)
     last = i + keyl + 1
     return last < l &&
-           getc(s, last) == '"' &&
+           @getc(s, last) == '"' &&
            memcmp(pointer(s, i + 1), keyp, keyl) == 0
 end
 
 
-function Base.get(o::LazyerObject, key::AbstractString, default)
+function Base.get(o::JSON.Object, key::AbstractString, default)
 
     keyp = pointer(key)
     keyl = sizeof(key)
@@ -152,56 +149,94 @@ end
 
 
 
-lazyer_getpath(s, path=[]) = lazyer_getpath(s, path, skip_ws(s)...)
+# JSON Key Path Search
 
-function lazyer_getpath(s, path, i, c)
+"""
+Find the value at a specified key `path` in a JSON text.
+ - `s`, a JSON text
+ - `path`, A vector of Ints and Strings representing JSON Array indexes and
+           JSON Object field names.
+ - `i`, start index
+ - `c`, byte at index `i`
+"""
+
+function getpath(s, path, i::Int, c::UInt8)
     
-    v = lazyer_get(s, i, c)
+    v = getvalue(s, i, c)
 
     for key in path
-        if v isa LazyerArray && key isa Integer
+        if v isa JSON.Array && key isa Integer
             i, c = getindex(v, key)
-        elseif v isa LazyerObject && key isa AbstractString
+        elseif v isa JSON.Object && key isa AbstractString
             i, c = get(v, key, :notfound)
         else
             throw(KeyError(key))
         end
-        v = lazyer_get(s, i, c)
+        v = getvalue(s, i, c)
     end
     return v
 end
 
-function lazyer(s::LazyerInput, k, i, c)
+getpath(s, path=[]) = getpath(s, path, skip_ws(s)...)
 
-    i = if c == '{'                     push!(k, i); i
-    elseif c == '['                     push!(k, i); i
-    elseif isnum(c)                     lazyer_number(s, i)
-    elseif c == '"'                     lazyer_string(s, i)
-    elseif c == 'f'                     nexti(i, 5)
-    elseif c == 'n'                     nexti(i, 4)
-    elseif c == 't'                     nexti(i, 4)
-    elseif c == ']'                     pop!(k); i
-    elseif c == '}'                     pop!(k); i
+function skip_ws(s, i = 1)
+    c = @getc(s, i)
+    while isws(c)
+        @next_ic(s, i, c)
+    end
+    return i, c
+end
+
+
+
+# JSON Token Scanner
+
+"""
+Find index of the next value or array/object begin/end in a JSON text.
+ - `s`, a JSON text
+ - `nest`, array/object nesting count
+ - `i`, start index
+ - `c`, byte at index `i`
+
+Returns (nest, i, c)
+"""
+
+function next_token(s, nest::Int, i::Int, c::UInt8)
+
+    i = if c == '{' || c == '['         nest += 1; i
+    elseif c == ']' || c == '}'         nest -= 1; i
+    elseif c == '"'                     find_end_of_string(s, i)
+    elseif isnum(c)                     find_end_of_number(s, i)
+    elseif c == 'f'                     i + 4
+    elseif c == 'n'                     i + 3
+    elseif c == 't'                     i + 3
     elseif c == 0x00                    i
     else
         throw(ParseError(s, i, "invalid input"))
     end
 
-    i, c = skip_delim(s, nexti(i))
+    @next_ic(s, i, c)
+    while (isws(c) || c == ',' || c == ':')
+        @next_ic(s, i, c)
+    end
 
-    return k, i, c
+    return nest, i, c
 end
 
 
-function lazyer_string(s, i)
+"""
+Find index of last byte of a JSON String.
+"""
 
-    i, c = nextc(s, i)
+function find_end_of_string(s, i)::Int
 
-    while ischar(c) && c != '"'
+    @next_ic(s, i, c)
+
+    while !isnull(c) && c != '"'
         escape = c == '\\'
-        i, c = nextc(s, i)
-        if escape && ischar(c)
-            i, c = nextc(s, i)
+        @next_ic(s, i, c)
+        if escape && !isnull(c)
+            @next_ic(s, i, c)
         end
     end
 
@@ -209,33 +244,41 @@ function lazyer_string(s, i)
 end
 
 
-function lazyer_number(s, i)
+"""
+Find index of last byte of a JSON Number.
+"""
 
-    j, c = nextc(s, i)
+function find_end_of_number(s, i)::Int
+
+    last = i
+    @next_ic(s, i, c)
     
-    while ischar(c) &&
-         !isws(c)   &&
-          c != ']'  &&
-          c != '}'  &&
+    while !isnull(c) &&
+          !isws(c)   &&
+          c != ']'   &&
+          c != '}'   &&
           c != ','
-        i = j
-        j, c = nextc(s, i)
+        last = i
+        @next_ic(s, i, c)
     end
 
-    return i
+    return last
 end
 
 
+# Check for null terminator.
+# jl_alloc_string allocates n + 1 bytes and sets the last byte to 0x00
+# https://github.com/JuliaLang/julia/blob/master/src/array.c#L464
+isnull(c) = c == 0x00
 
-mutable struct Lazyer
-    s::String
-end
+isws(x) = x == ' '  ||
+          x == '\t' ||
+          x == '\r' ||
+          x == '\n'
+
+isnum(c) = c == '-' ||
+           c in UInt8('0'):UInt8('9')
 
 
-Base.IteratorSize(::Type{Lazyer}) = Base.SizeUnknown()
-
-Base.start(j::Lazyer) = (LazyIndex[], skip_delim(j.s, LazyIndex(1))...)
-Base.done(j::Lazyer, (k, i, c)) = !ischar(c)
-Base.next(j::Lazyer, (k, i, c)) = ((k, i, c), lazyer(j.s, k, i, c))
 
 end # module

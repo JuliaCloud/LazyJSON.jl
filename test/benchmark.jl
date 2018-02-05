@@ -14,7 +14,7 @@ n > 1 && println("Access value close to start:")
 n > 1 && print("LazyerJSON.jl:")
 GC.gc()
 @time for i in 1:n
-    r = string(LazyJSON.LazyerJSON.lazyer_getpath(j,
+    r = string(LazyJSON.LazyerJSON.getpath(j,
                ["operations",
                 "AcceptReservedInstancesExchangeQuote",
                 "input",
@@ -58,7 +58,7 @@ n > 1 && println("Access value close to end:")
 n > 1 && print("LazyerJSON.jl:")
 GC.gc()
 @time for i in 1:n
-    r = string(LazyJSON.LazyerJSON.lazyer_getpath(j,
+    r = string(LazyJSON.LazyerJSON.getpath(j,
                ["shapes", "scope", "enum", 1]))
     @assert r == "\"Availability Zone\""
 end
