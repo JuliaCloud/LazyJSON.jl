@@ -5,12 +5,37 @@ const JSON = LazyerJSON
 import ..ParseError
 
 
-# Byte Wrangling Utilities
+# JSON Value Types
+# Represented by a string and a byte index.
 
-# Allow comparison of UInt8 with Char (e.g. c == '{')
-==(a, b) = Base.isequal(a, b)
-!=(a, b) = !(a == b)
-==(i::T, c::Char) where T <: Integer = Base.isequal(i, T(c))
+struct String{T <: AbstractString}
+    s::T
+    i::Int 
+end
+
+struct Number{T <: AbstractString}
+    s::T
+    i::Int 
+end
+
+struct Object{T <: AbstractString}
+    s::T
+    i::Int 
+end
+
+struct Array{T <: AbstractString}
+    s::T
+    i::Int 
+
+end
+
+const Collection = Union{JSON.Object, JSON.Array}
+
+
+Base.string(s::JSON.Collection) = SubString(s.s, s.i)
+Base.string(s::JSON.String) = SubString(s.s, s.i, find_end_of_string(s.s, s.i))
+Base.string(s::JSON.Number) = SubString(s.s, s.i, find_end_of_number(s.s, s.i))
+
 
 
 # Access bytes of string without bounds checking
@@ -27,44 +52,12 @@ end
 
 
 
-# JSON Value Types
-# Represented by a string and a byte index.
-
-struct String{T}
-    s::T
-    i::Int 
-end
-
-struct Number{T}
-    s::T
-    i::Int 
-end
-
-struct Object{T}
-    s::T
-    i::Int 
-end
-
-struct Array{T}
-    s::T
-    i::Int 
-
-end
-
-const Collection = Union{JSON.Object, JSON.Array}
-
-
-Base.string(s::JSON.Collection) = SubString(s.s, s.i)
-Base.string(s::JSON.String) = SubString(s.s, s.i, find_end_of_string(s.s, s.i))
-Base.string(s::JSON.Number) = SubString(s.s, s.i, find_end_of_number(s.s, s.i))
-
-
-
 """
 Get a JSON value object for a value in a JSON text.
  - `i`, byte index of the value in JSON text.
  - `c`, first byte of the value.
 """
+function getvalue end
 
 function getvalue(s, i, c=@getc(s, i))
         if c == '{'                     JSON.Object(s, i)
@@ -86,7 +79,9 @@ end
 # JSON Object/Array Iterator
 
 Base.start(j::JSON.Collection) = (0, j.i, @getc(j.s, j.i))
+
 Base.done(j::JSON.Collection, (nest, i, c)) = (c == ']' || c == '}')
+
 function Base.next(j::JSON.Collection, (nest, i, c))
     nest, i, c = next_token(j.s, nest, i, c)
     while nest > 1
@@ -204,7 +199,7 @@ Returns (nest, i, c)
 function next_token(s, nest::Int, i::Int, c::UInt8)
 
     i = if c == '{' || c == '['         nest += 1; i
-    elseif c == ']' || c == '}'         nest -= 1; i
+    elseif c == '}' || c == ']'         nest -= 1; i
     elseif c == '"'                     find_end_of_string(s, i)
     elseif isnum(c)                     find_end_of_number(s, i)
     elseif c == 'f'                     i + 4
@@ -278,6 +273,15 @@ isws(x) = x == ' '  ||
 
 isnum(c) = c == '-' ||
            c in UInt8('0'):UInt8('9')
+
+
+
+# Byte Wrangling Utilities
+
+# Allow comparison of UInt8 with Char (e.g. c == '{')
+==(a, b) = Base.isequal(a, b)
+!=(a, b) = !(a == b)
+==(i::T, c::Char) where T <: Integer = Base.isequal(i, T(c))
 
 
 

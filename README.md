@@ -101,16 +101,18 @@ real-world testing or performance measurement has been done yet.
 The `test/benchmark.jl` test uses a [1MB AWS API definition JSON file](https://github.com/samoconnor/jsonhack/blob/master/test/ec2-2016-11-15.normal.json)
 to compare performance vs JSON.jl.  When accessing a value close to the
 start of the file the lazy parser is ~1000 times faster than JSON.jl,
-for a value near then end of the file, the lazy parser is ~2 times faster.
+for a value near then end of the file, the lazyer parser is ~5 times faster.
 
 ```
 Access value close to start:
+LazyerJSON.jl:          0.001080 seconds (6.65 k allocations: 222.656 KiB)
 LazyJSON.jl with path:  0.001051 seconds (7.03 k allocations: 982.656 KiB)
 LazyJSON.jl:            0.002873 seconds (36.48 k allocations: 2.508 MiB)
 JSON.jl:                0.996974 seconds (9.34 M allocations: 913.682 MiB, 12.38% gc time)
 
 
 Access value close to end:
+LazyerJSON.jl:          0.197240 seconds (7.60 k allocations: 243.438 KiB)
 LazyJSON.jl with path:  0.450964 seconds (196.46 k allocations: 9.605 MiB)
 LazyJSON.jl:            0.893084 seconds (9.79 M allocations: 483.524 MiB, 8.23% gc time)
 JSON.jl:                0.994393 seconds (9.34 M allocations: 913.682 MiB, 12.79% gc time)
