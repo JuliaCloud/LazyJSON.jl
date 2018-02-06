@@ -45,22 +45,21 @@ sequences or care if the characters are "valid".
 ```
 ┌───────────────────────────────┐                               ┌───────────┐
 │ JSON.String <: AbstractString │                               │ SubString │
-│  bytes::CodeUnits             ├─────────────────────────────▶ └───────────┘
-│  first::Int                   │     convert, unescape,        ┌───────────┐
-│  last::Int                    │    constructors etc...        │ String    │
+│  s::String                    ├─────────────────────────────▶ └───────────┘
+│  i::Int                       │     convert, unescape,        ┌───────────┐
+│                               │    constructors etc...        │ String    │
 └───────────────────────────────┘                               └───────────┘
 ┌───────────────────────────────┐                               ┌───────────┐
 │ JSON.Number <: Number         │                               │ Int64     │
-│  bytes::CodeUnits             ├─────────────────────────────▶ └───────────┘
-│  first::Int                   │   convert, promote_rule,      ┌───────────┐
-│  last::Int                    │   +, -, *, /, ^, etc...       │ Float64   │
+│  s::String                    ├─────────────────────────────▶ └───────────┘
+│  i::Int                       │   convert, promote_rule,      ┌───────────┐
+│                               │   +, -, *, /, ^, etc...       │ Float64   │
 └───────────────────────────────┘                               └───────────┘
 ```
 
 
-The Array and Object collection types are implemented as flat vectors
-wrapped with AbstractArray and AbstractDict interfaces. When a JSON
-file containing an Array of values is processed the parser stops
+The Array and Object collection types are also represneted as byte indexs.
+When a JSON file containing an Array of values is processed the parser stops
 and returns and empty array object as soon as it sees the '[`' at
 the start of the input.  As the user requests particular values in
 the array, the parser processes just enough to return the requested
@@ -70,59 +69,49 @@ to nested Objects and Arrays.
 ```
 ┌───────────────────────────────┐
 │ JSON.Array <: AbstractArray   │                               ┌───────────┐
-│  v::Vector{Any}               ├─────────────────────────────▶ │ Array     │
-│  iscomplete{Bool}             │       length, getindex,       └───────────┘
+│  s::String                    ├─────────────────────────────▶ │ Array     │
+│  i::Int                       │       length, getindex,       └───────────┘
 │                               │   start, done, next, etc...
 └───────────────────────────────┘
 ┌───────────────────────────────┐                               ┌───────────┐
 │ JSON.Object <: AbstractDict   │                               │ Dict      │
-│  v::Vector{Any}               ├─────────────────────────────▶ └───────────┘
-│  iscomplete{Bool}             │      keys, length, get,       ┌───────────┐
+│  s::String                    ├─────────────────────────────▶ └───────────┘
+│  i::Int                       │      keys, length, get,       ┌───────────┐
 │                               │   start, done, next, etc...   │ Pairs     │
 └───────────────────────────────┘                               └───────────┘
 ```
 
 
-The main `parse_value` function runs as a co-routine. Whenever it
-finishes parsing a value-fragment it yields control back to the
-main application task and waits. When some application code calls
-`getindex(::JSON.Array, ::Int)` the `parse_value` co-routine is
-resumed until the value at the requested index has been parsed.
-
-The `use_promotejson::Bool` setting enables optional caching of values
-that have been promoted to normal Julia types as they are accessed.
+The main `parse` function simply returns a wrapper object for index 1.
 
 The `enable_assertions::Bool` setting controls checks that are not
 necessary if the input is known to be valid JSON.
 
-The test cases cover https://github.com/nst/JSONTestSuite, but no
+The test cases cover https://github.com/nst/JSONTestSuite [FIXME
+update for revised "lazyer" parser, but no
 real-world testing or performance measurement has been done yet.
 
 The `test/benchmark.jl` test uses a [1MB AWS API definition JSON file](https://github.com/samoconnor/jsonhack/blob/master/test/ec2-2016-11-15.normal.json)
 to compare performance vs JSON.jl.  When accessing a value close to the
-start of the file the lazy parser is ~1000 times faster than JSON.jl,
-for a value near then end of the file, the lazyer parser is ~5 times faster.
+start of the file the lazy parser is ~2000 times faster than JSON.jl,
+for values near then end of the file, the lazy parser is ~6 times faster.
 
 ```
 Access value close to start:
-LazyerJSON.jl:          0.001080 seconds (6.65 k allocations: 222.656 KiB)
-LazyJSON.jl with path:  0.001051 seconds (7.03 k allocations: 982.656 KiB)
-LazyJSON.jl:            0.002873 seconds (36.48 k allocations: 2.508 MiB)
-JSON.jl:                0.996974 seconds (9.34 M allocations: 913.682 MiB, 12.38% gc time)
+LazyJSON.jl:  0.000558 seconds (3.23 k allocations: 121.719 KiB)
+JSON.jl:      1.025800 seconds (9.34 M allocations: 913.682 MiB, 12.53% gc time)
 
 
-Access value close to end:
-LazyerJSON.jl:          0.197240 seconds (7.60 k allocations: 243.438 KiB)
-LazyJSON.jl with path:  0.450964 seconds (196.46 k allocations: 9.605 MiB)
-LazyJSON.jl:            0.893084 seconds (9.79 M allocations: 483.524 MiB, 8.23% gc time)
-JSON.jl:                0.994393 seconds (9.34 M allocations: 913.682 MiB, 12.79% gc time)
+Access 2 values close to end:
+LazyJSON.jl:  0.162446 seconds (2.66 k allocations: 71.250 KiB)
+JSON.jl:      1.019581 seconds (9.34 M allocations: 913.682 MiB, 12.22% gc time)
 ```
 
 
 The `test/benchmark_geo.jl` test uses a 1.2MB GeoJSON file
 to compare performance vs JSON.jl. The first test extracts a country name 
 near the middle of the file. The second test checks that the country outline
-polygon is at the expected coordinates.
+polygon is at the expected coordinates. [FIXME update for revised parser]
 
 ```
 Country name
@@ -136,15 +125,16 @@ JSON.jl:      1.033109 seconds (8.62 M allocations: 373.541 MiB, 9.13% gc time)
 
 
 TODO:
- - path= kw option implementation is a nasty hack, needs cleanup
+ - New Lazyer parser looses some format validation, consider recovering old code.
  - Performance measurement and tuning
  - Large input test cases
  - Implement the AbstractString interface for JSON.String
- - Implement un-escaping
  - Consider how un-escaping relates to object field name matching.
    If the ket to be matched can be translated to a normalised escaped form
    then we won't need to un-escape all the field names (only the ones that
    are in a non-normal escaped form).
+ - compare up to first escape sequence?
+ - compare function that transparently evaluates escapes?
 
 See also:
  - Another lazy JSON parser: https://github.com/doubledutch/LazyJSON
