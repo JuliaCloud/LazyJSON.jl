@@ -13,7 +13,7 @@ function Base.convert(::Type{Base.Number}, n::JSON.Number)
         v = tryparse(Float64, s)
     end
     if v == nothing
-        throw(InexactError(:convert, Base.Number, s))
+        v = BigFloat(convert(Base.String, s))
     end
     return v
 end
@@ -27,22 +27,23 @@ function Base.convert(::Type{T}, n::JSON.Number) where T <: Union{Int64, Float64
     return v
 end
 
-
 Base.Number(n::JSON.Number) = convert(Base.Number, n)
 Base.Int64(n::JSON.Number) = convert(Base.Int64, n)
 Base.Float64(n::JSON.Number) = convert(Base.Float64, n)
 
 
 import Base: +, -, *, /, ^
-+(a::T, b::T) where {T <: JSON.Number} = promotejson(a) + promotejson(b)
--(a::T, b::T) where {T <: JSON.Number} = promotejson(a) - promotejson(b)
-*(a::T, b::T) where {T <: JSON.Number} = promotejson(a) * promotejson(b)
-/(a::T, b::T) where {T <: JSON.Number} = promotejson(a) / promotejson(b)
-^(a::T, b::T) where {T <: JSON.Number} = promotejson(a) ^ promotejson(b)
++(a::T, b::T) where {T <: JSON.Number} = Base.Number(a) + Base.Number(b)
+-(a::T, b::T) where {T <: JSON.Number} = Base.Number(a) - Base.Number(b)
+*(a::T, b::T) where {T <: JSON.Number} = Base.Number(a) * Base.Number(b)
+/(a::T, b::T) where {T <: JSON.Number} = Base.Number(a) / Base.Number(b)
+^(a::T, b::T) where {T <: JSON.Number} = Base.Number(a) ^ Base.Number(b)
 
 Base.isless(a::Base.Number, b::JSON.Number) = isless(a, convert(Base.Number, b))
 Base.isless(a::JSON.Number, b::Base.Number) = isless(convert(Base.Number, a), b)
 
 
-Base.promote_rule(::Type{T}, ::Type{JSON.Number}) where T <: Integer = Int64
-Base.promote_rule(::Type{T}, ::Type{JSON.Number}) where T <: AbstractFloat = Float64
+Base.promote_rule(
+    ::Type{T}, ::Type{JSON.Number{S}}) where {S, T <: Integer} = Int64
+Base.promote_rule(
+    ::Type{T}, ::Type{JSON.Number{S}}) where {S, T <: AbstractFloat} = Float64

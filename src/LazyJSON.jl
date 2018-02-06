@@ -1,6 +1,6 @@
 module LazyJSON
 
-const JSON = LazyerJSON
+const JSON = LazyJSON
 
 const enable_assertions = false
 
@@ -9,24 +9,24 @@ const enable_assertions = false
 # JSON Value Types
 # Represented by a string and a byte index.
 
-struct String{T <: AbstractString}
+struct String{T <: AbstractString} #<: AbstractString
     s::T
-    i::Int 
+    i::Int
 end
 
-struct Number{T <: AbstractString}
+struct Number{T <: AbstractString} <: Base.Number
     s::T
-    i::Int 
+    i::Int
 end
 
-struct Object{T <: AbstractString} <: AbstractDict{AbstractString, Any}
+struct Object{T <: AbstractString} #<: AbstractDict{AbstractString, Any}
     s::T
-    i::Int 
+    i::Int
 end
 
-struct Array{T <: AbstractString}  <: AbstractArray{Any, 1}
+struct Array{T <: AbstractString}  #<: AbstractArray{Any, 1}
     s::T
-    i::Int 
+    i::Int
 end
 
 const Value = Union{JSON.String, JSON.Number, JSON.Object, JSON.Array}
@@ -42,7 +42,19 @@ end
 """
 Verbatim JSON text of a `JSON.Value`
 """
-Base.string(s::JSON.Value) = SubString(s, i, lastindex_of_value(s, i))
+Base.string(s::JSON.Value) = SubString(s.s, s.i, lastindex_of_value(s.s, s.i))
+
+
+promotejson(x; kw...) = x
+promotejson(n::JSON.Number) = convert(Base.Number, n)
+promotejson(s::JSON.String) = convert(AbstractString, s)
+promotejson(a::JSON.Array)  = convert(Vector, a)
+promotejson(o::JSON.Object) = convert(Dict, o)
+
+rpromotejson(x) = promotejson(x)
+rpromotejson(a::JSON.Array) = [rpromotejson(x) for x in a]
+rpromotejson(o::JSON.Object) = [rpromotejson(k) => rpromotejson(v)
+                                for (k,v) in o]
 
 
 
@@ -70,31 +82,42 @@ end
 
 getvalue(s) = getvalue(s, skip_whitespace(s)...)
 
+parse(s) = getvalue(s)
 
 
 # JSON Object/Array Iterator
 
-Base.start(j::JSON.Collection) = (j.i, 0x00)
+struct Indexes{T}
+    j::T
+end
 
-Base.done(j::JSON.Collection, (i, c)) = (c == ']' || c == '}')
+indexes(j::T) where T <: JSON.Collection = Indexes{T}(j)
 
-function Base.next(j::JSON.Collection, (i, c))
+Base.start(j::Indexes) = (j.j.i, 0x00)
+Base.done(j::Indexes, (i, c)) = (c == ']' || c == '}')
+function Base.next(j::Indexes, (i, c))
+    i, c = nextindex(j.j, i, c)
+    return (i, c), (i, c)
+end
+
+function nextindex(j, i, c)
     if i > j.i
         i = lastindex_of_value(j.s, i, c)
     end
     i, c = skip_noise(j.s, i + 1)
-    return (i, c), (i, c)
+    return i, c
 end
 
-Base.IteratorSize(::Type{JSON.Object{T}}) where T = Base.SizeUnknown()
-Base.IteratorSize(::Type{JSON.Array{T}}) where T = Base.SizeUnknown()
+
+Base.IteratorSize(::Type{Indexes{T}}) where T = Base.SizeUnknown()
+Base.IteratorEltype(::Type{Indexes{T}}) where T = Base.EltypeUnknown()
 
 
 
 # JSON Array Lookup
 
 function getindex_ic(a::JSON.Array, n::Int)
-    for (i, c) in a
+    for (i, c) in indexes(a)
         if c == ']'
            throw(BoundsError(a, n))
         end
@@ -102,10 +125,8 @@ function getindex_ic(a::JSON.Array, n::Int)
             return i, c
         end
         n -= 1
-    end 
+    end
 end
-
-Base.getindex(a::JSON.Array, i) = getvalue(a.s, getindex_ic(a, i)...)
 
 
 
@@ -118,6 +139,10 @@ function keycmp(keyp, keyl, s, l, i)
     return last < l &&
            getc(s, last) == '"' &&
            memcmp(pointer(s, i + 1), keyp, keyl) == 0
+#= FIXME
+ - compare up to first escape sequence?
+ - compare function that transparently evaluates escapes?
+=#
 end
 
 
@@ -130,7 +155,7 @@ function get_ic(o::JSON.Object, key::AbstractString, default)
     foundkey = false
     count = 1
 
-    for (i, c) in o
+    for (i, c) in indexes(o)
         if count % 2 == 1
             foundkey = keycmp(keyp, keyl, s, l, i)
         elseif foundkey
@@ -139,14 +164,6 @@ function get_ic(o::JSON.Object, key::AbstractString, default)
         count += 1
     end
     return default
-end
-
-function Base.get(o::JSON.Object, key, default)
-    i, c = get_ic(o, key, (0, 0x00))
-    if i == 0
-        return default
-    end
-    return getvalue(o.s, i, c)
 end
 
 
@@ -162,7 +179,7 @@ Find the value at a specified key `path` in a JSON text.
  - `c`, byte at index `i`
 """
 function getpath(s, path, i::Int, c::UInt8=getc(s, i))
-    
+
     v = getvalue(s, i, c)
 
     for key in path
@@ -292,7 +309,7 @@ function lastindex_of_number(s, i)::Int
 
     last = i
     i, c = next_ic(s, i)
-    
+
     while !isnull(c) && !isnoise(c) && !isend(c)
         last = i
         i, c = next_ic(s, i)
@@ -417,9 +434,11 @@ setc(s, i, c) = (unsafe_store!(pointer(s), c, i); i + 1)
 ==(i::T, c::Char) where T <: Integer = Base.isequal(i, T(c))
 
 
+
 # Debug Display
 
-Base.show(io::IO, j::Union{JSON.String, JSON.Number}) = show(io, string(j))
+Base.show(io::IO, j::Union{JSON.String, JSON.Number}) =
+    show(io, promotejson(j))
 
 const showmax = 1000
 
@@ -430,6 +449,23 @@ function Base.show(io::IO, j::JSON.Collection)
     else
         print(io, typeof(j), ": ", s)
     end
+end
+
+
+function Base.show(io::IO, e::JSON.ParseError)
+
+    s = e.bytes
+    l = findprev(equalto('\n'), s, e.index)
+    l = l != nothing ? l + 1 : 1
+    r = findnext(equalto('\n'), s, max(1, e.index-1))
+    r = r != nothing ? r - 1 : length(s)
+    l = min(length(s), l)
+    line_number = length(split(SubString(s, 1, l), '\n'))
+    col_number = e.index - l + 1
+    print(io, "JSON.ParseError: ", e.message,
+              " at line ", line_number, ", col ", col_number, "\n",
+              SubString(s, l, r), "\n",
+              lpad("", col_number - 1, " "), "^")
 end
 
 

@@ -6,14 +6,17 @@ function Base.convert(::Type{SubString}, s::JSON.String)
     s, i = s.s, s.i
     last_i, has_escape = scan_string(s, i)
     if !has_escape
-        return SubString(s, i+1, last_i-1)
+        return SubString(s, i+1, prevind(s, last_i))
     else
         return unescape_string!(s, i+1, last_i-1)
     end
 end
 
-Base.convert(::Type{Base.String}, s::JSON.String) = convert(Base.String,
-                                                    convert(Base.SubString, s))
+Base.convert(::Type{AbstractString}, s::JSON.String) =
+    convert(Base.SubString, s)
+
+Base.convert(::Type{Base.String}, s::JSON.String) =
+    convert(Base.String, convert(Base.SubString, s))
 
 Base.String(s::JSON.String) = convert(Base.String, s)
 Base.SubString(s::JSON.String) = convert(Base.SubString, s)
@@ -72,10 +75,10 @@ end
 
 
 """
-Unescape `l` bytes of a String `s` starting at byte index `i`.
+Unescape bytes of a String `s` up to byte index `l`, starting at byte index `i`.
 Return a new String.
 """
-function unescape_string!(s, l, i)
+function unescape_string!(s, i, l)
 
     out = Base.String(Vector{UInt8}(uninitialized, l - i))
     j = 1 
