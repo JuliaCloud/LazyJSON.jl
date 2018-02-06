@@ -1,12 +1,4 @@
 """
-`string(::JSON.Number)` creates a `Base.SubString` without copying.
-This is a verbatim substring of the JSON text.
-"""
-
-Base.string(n::JSON.Number) = SubString(n.bytes.s, n.first, n.last)
-
-
-"""
 `convert(Base.Number, JSON.Number)` parses the number string and returns
 `Int64` or `Float64`.
 

@@ -1,8 +1,9 @@
-module LazyerJSON
+module LazyJSON
 
 const JSON = LazyerJSON
 
-import ..ParseError
+const enable_assertions = false
+
 
 
 # JSON Value Types
@@ -31,19 +32,17 @@ end
 const Value = Union{JSON.String, JSON.Number, JSON.Object, JSON.Array}
 const Collection = Union{JSON.Object, JSON.Array}
 
-value_string(s, i) = SubString(s, i, lastindex_of_value(s, i))
-
-Base.string(s::JSON.Value) = value_string(s.s, s.i)
-
-function Base.string(s::JSON.String)
-    s, i = s.s, s.i
-    last_i, has_escape = scan_string(s, i)
-    if !has_escape
-        return SubString(s, i+1, last_i-1)
-    else
-        return unescape_string!(s, i+1, last_i-1)
-    end
+struct ParseError <: Exception
+    bytes::Base.String
+    index::Int
+    message::Base.String
 end
+
+
+"""
+Verbatim JSON text of a `JSON.Value`
+"""
+Base.string(s::JSON.Value) = SubString(s, i, lastindex_of_value(s, i))
 
 
 
@@ -116,7 +115,6 @@ memcmp(a, b, l) = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, l)
 
 function keycmp(keyp, keyl, s, l, i)
     last = i + keyl + 1
-    vs = value_string(s, i)
     return last < l &&
            getc(s, last) == '"' &&
            memcmp(pointer(s, i + 1), keyp, keyl) == 0
@@ -287,62 +285,6 @@ function scan_string(s, i)
 end
 
 
-function unescape_string!(s, l, i)
-
-    out = Base.String(Vector{UInt8}(uninitialized, l - i))
-    j = 1 
-
-    c = getc(s, i)
-
-    utf16 = 0x0000
-
-    while i <= l
-        if c == '\\' && i + 1 <= l
-            i, c = next_ic(s, i)
-            uc = unescape_c(c)
-            if uc == 0x00 || uc == 'u' && i + 4 > l
-                j = setc(out, j, UInt8('\\'))
-            elseif uc != 'u'
-                c = uc
-            else
-                i, c16 = unescape_hex4(s, i)
-                if utf16 != 0x0000
-                    c32 = UInt32(utf16 - 0xd7f7) << 10 + c16
-                    j = setc_utf8(out, j, c32)
-                    utf16 = 0x0000
-                elseif (c16 & 0xf800) == 0xd800
-                    utf16 = c16
-                else
-                    j = setc_utf8(out, j, c16)
-                end
-                i, c = next_ic(s, i)
-                continue
-            end
-        end
-        if utf16 != 0x0000
-            j = setc_utf8(out, j, utf16)
-            utf16 = 0x0000
-        end
-        j = setc(out, j, c)
-        i, c = next_ic(s, i)
-    end
-    setc(out, j, 0x00)
-
-    return SubString(out, 1, prevind(out, j))
-end
-
-
-function setc_utf8(s, i, u)
-    bytes = bswap(reinterpret(UInt32, Char(u)))
-    while bytes != 0
-        setc(s, i, bytes % UInt8)
-        i += 1
-        bytes >>= 8
-    end
-    return i
-end
-
-
 """
 Find index of last byte of a JSON Number.
 """
@@ -440,30 +382,6 @@ isnoise(c) = c == ',' ||
              iswhitespace(c)
 
 
-"""
-https://tools.ietf.org/html/rfc7159#section-7
-
-    char = unescaped /
-        escape (
-            %x22 /          ; "    quotation mark  U+0022
-            %x5C /          ; \\    reverse solidus U+005C
-            %x2F /          ; /    solidus         U+002F
-            %x62 /          ; b    backspace       U+0008
-            %x66 /          ; f    form feed       U+000C
-            %x6E /          ; n    line feed       U+000A
-            %x72 /          ; r    carriage return U+000D
-            %x74 /          ; t    tab             U+0009
-            %x75 4HEXDIG )  ; uXXXX                U+XXXX
-"""
-unescape_c(c) = c == '"'  ? c :
-               c == '\\' ? c :
-               c == '/'  ? c :
-               c == 'b'  ? UInt8('\b') :
-               c == 'f'  ? UInt8('\f') :
-               c == 'n'  ? UInt8('\n') :
-               c == 'r'  ? UInt8('\f') :
-               c == 't'  ? UInt8('\t') :
-               c == 'u'  ? c : 0x00
 
 
 # Byte Wrangling Utilities
@@ -499,24 +417,6 @@ setc(s, i, c) = (unsafe_store!(pointer(s), c, i); i + 1)
 ==(i::T, c::Char) where T <: Integer = Base.isequal(i, T(c))
 
 
-"""
-Lookup tables for hex digits.
-"""
-hexstring(c) = tryparse(UInt16, "0x$c")
-const unhex_1 = [isxdigit(c) ? hexstring(c) : UInt16(0) for c in Char(1):Char(255)]
-const unhex_10 = unhex_1 * 0x10
-const unhex_100 = unhex_10 * 0x10
-const unhex_1000 = unhex_100 * 0x10
-
-function unescape_hex4(s, i)
-    i, c = next_ic(s, i) ; u  = @inbounds(unhex_1000[c])
-    i, c = next_ic(s, i) ; u += @inbounds(unhex_100[c])
-    i, c = next_ic(s, i) ; u += @inbounds(unhex_10[c])
-    i, c = next_ic(s, i) ; u += @inbounds(unhex_1[c])
-    return i, u
-end
-
-
 # Debug Display
 
 Base.show(io::IO, j::Union{JSON.String, JSON.Number}) = show(io, string(j))
@@ -531,6 +431,13 @@ function Base.show(io::IO, j::JSON.Collection)
         print(io, typeof(j), ": ", s)
     end
 end
+
+
+
+include("AbstractString.jl")
+include("Number.jl")
+include("AbstractArray.jl")
+include("AbstractDict.jl")
 
 
 
