@@ -92,7 +92,7 @@ s =                  [' ' '\\' '"' ' ' '\u1234' '!' ]
 
 j = "\"Hello!\""
 
-js = JSON.String(j, 1) 
+js = JSON.String(j, 1)
 @test ncodeunits(js) == 6
 @test js == "Hello!"
 

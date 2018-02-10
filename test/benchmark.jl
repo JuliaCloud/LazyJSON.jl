@@ -1,7 +1,9 @@
+module LazyJSONBenchmark
+
 using LazyJSON
 using JSON
 
-function go() 
+function go()
 
 j = String(read("ec2-2016-11-15.normal.json"))
 
@@ -82,4 +84,6 @@ end
 
 end
 
-go()
+end
+
+LazyJSONBenchmark.go()

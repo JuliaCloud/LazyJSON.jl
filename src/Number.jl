@@ -1,3 +1,5 @@
+# Number interface methods
+
 """
 `convert(Base.Number, JSON.Number)` parses the number string and returns
 `Int64` or `Float64`.

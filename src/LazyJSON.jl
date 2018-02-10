@@ -21,12 +21,12 @@ struct Number{T <: AbstractString} <: Base.Number
     i::Int
 end
 
-struct Object{T <: AbstractString} #<: AbstractDict{AbstractString, Any}
+struct Object{T <: AbstractString} <: AbstractDict{AbstractString, Any}
     s::T
     i::Int
 end
 
-struct Array{T <: AbstractString}  #<: AbstractArray{Any, 1}
+struct Array{T <: AbstractString}  <: AbstractArray{Any, 1}
     s::T
     i::Int
 end
@@ -169,6 +169,13 @@ end
 Base.IteratorSize(::Type{Indexes{T}}) where T = Base.SizeUnknown()
 Base.IteratorEltype(::Type{Indexes{T}}) where T = Base.EltypeUnknown()
 
+function collection_length(c::JSON.Collection)
+    count = -1
+    for i in indexes(c)
+        count += 1
+    end
+    return count
+end
 
 
 # JSON Array Lookup
@@ -211,7 +218,6 @@ function get_ic(o::JSON.Object, key::AbstractString, default)
                        key1 == getc(s, i + 1) &&
                        (keyl == 1 || memcmp(pointer(s, i+2), keyp, keyl-1) == 0)
         end
-#        @show Char(key1), key, Char(c), i, foundkey, SubString(o.s, i, lastindex_of_value(o.s, i))
 
         i, c = skip_noise(s, last_i + 1)
 
@@ -500,6 +506,7 @@ Base.show(io::IO, j::Union{JSON.String, JSON.Number}) =
 
 const showmax = 1000
 
+#=
 function Base.show(io::IO, j::JSON.Collection)
     s = string(j)
     if length(s) > showmax
@@ -508,6 +515,7 @@ function Base.show(io::IO, j::JSON.Collection)
         print(io, typeof(j), ": ", s)
     end
 end
+=#
 
 
 function Base.show(io::IO, e::JSON.ParseError)

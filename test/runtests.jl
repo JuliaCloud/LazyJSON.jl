@@ -337,7 +337,7 @@ c = String(UInt8[ 0xf4, 0xbf, 0xbf, 0xbf])
 @test jparse("[\"a\"]\n") == Any["a"] # y_structure_trailing_newline.json
 @test jparse("[true]") == Any[true] # y_structure_true_in_array.json
 @test jparse(" [] ") == Any[] # y_structure_whitespace_array.json
-    
+
 end # testset
 
 
@@ -367,7 +367,10 @@ end # testset
 end # testset
 
 
-
 #-------------------------------------------------------------------------------
 end # top level testset JSON
 #-------------------------------------------------------------------------------
+
+include("benchmark.jl")
+include("benchmark_geo.jl")
+

@@ -126,15 +126,6 @@ JSON.jl:      1.033109 seconds (8.62 M allocations: 373.541 MiB, 9.13% gc time)
 
 TODO:
  - New Lazyer parser looses some format validation, consider recovering old code.
- - Performance measurement and tuning
- - Large input test cases
- - Implement the AbstractString interface for JSON.String
- - Consider how un-escaping relates to object field name matching.
-   If the ket to be matched can be translated to a normalised escaped form
-   then we won't need to un-escape all the field names (only the ones that
-   are in a non-normal escaped form).
- - compare up to first escape sequence?
- - compare function that transparently evaluates escapes?
 
 See also:
  - Another lazy JSON parser: https://github.com/doubledutch/LazyJSON

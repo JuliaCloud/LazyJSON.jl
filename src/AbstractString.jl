@@ -1,3 +1,5 @@
+# AbstractString interface methods
+
 """
 Processes escape sequences and return a `Base.Substring`
 (without copying where possible).
