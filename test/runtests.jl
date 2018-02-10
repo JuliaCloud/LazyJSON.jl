@@ -86,6 +86,71 @@ end
 
 end # testset
 
+#-------------------------------------------------------------------------------
+@testset "http://www.json.org/JSON_checker" begin
+#-------------------------------------------------------------------------------
+
+j = String(read("json_checker.json"))
+
+v = JSON.parse(j)
+
+@test v[1] == "JSON Test Pattern pass1"
+@test v[2]["object with 1 member"][1] == "array with 1 element"
+@test length(v[3]) == 0
+@test v[3] isa JSON.Object
+@test [x for x in v[4]] == Any[]
+@test v[4] isa JSON.Array
+@test v[5] == -42
+@test v[6]
+@test !v[7]
+@test v[8] == nothing
+@test v[9]["integer"] == 1234567890
+@test v[9]["real"] == -9876.543210
+@test v[9]["e"] == 0.123456789e-12
+@test v[9]["E"] == 1.234567890E+34
+@test v[9][""] == 23456789012E66
+@test v[9]["zero"] == 0
+@test v[9]["one"] == 1
+@test v[9]["space"] == " "
+@test v[9]["quote"] == "\""
+@test v[9]["backslash"] == "\\"
+@test v[9]["controls"] == "\b\f\n\r\t"
+@test v[9]["slash"] == "/ & /"
+@test v[9]["alpha"] == "abcdefghijklmnopqrstuvwyz"
+@test v[9]["ALPHA"] == "ABCDEFGHIJKLMNOPQRSTUVWYZ"
+@test v[9]["digit"] == "0123456789"
+@test v[9]["0123456789"] == "digit"
+@test v[9]["special"] == "`1~!@#\$%^&*()_+-={':[,]}|;.</>?"
+@test v[9]["hex"] == "\u0123\u4567\u89AB\uCDEF\uabcd\uef4A"
+@test v[9]["true"] == true
+@test v[9]["false"] == false
+@test v[9]["null"] == nothing
+@test [x for x in v[9]["array"]] == Any[]
+@test [x for x in v[9]["object"]] == Pair[]
+@test v[9]["address"] == "50 St. James Street"
+@test v[9]["url"] == "http://www.JSON.org/"
+@test v[9]["comment"] == "// /* <!-- --"
+@test v[9]["# -- --> */"] == " "
+@test collect(v[9][" s p a c e d "]) == collect(1:7)
+@test collect(v[9]["compact"]) == collect(1:7)
+@test v[9]["jsontext"] == "{\"object with 1 member\":[\"array with 1 element\"]}"
+@test v[9]["quotes"] == "&#34; \u0022 %22 0x22 034 &#x22;"
+@test v[9]["/\\\"\uCAFE\uBABE\uAB98\uFCDE\ubcda\uef4A\b\f\n\r\t`1~!@#\$%^&*()_+-=[]{}|;:',./<>?"] == "A key can be any string"
+@test v[10] == 0.5
+@test v[11] == 98.6
+@test v[12] == 99.44
+@test v[13] == 1066
+@test v[14] == 1e1
+@test v[15] == 0.1e1
+@test v[16] == 1e-1
+@test v[17] == 1e00
+@test v[18] == 2e+00
+@test v[19] == 2e-00
+@test v[20] == "rosebud"
+
+
+end # testset
+
 
 #-------------------------------------------------------------------------------
 @testset "Escaped values in keys" begin
