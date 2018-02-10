@@ -2,15 +2,17 @@
 Processes escape sequences and return a `Base.Substring`
 (without copying where possible).
 """
-function Base.convert(::Type{SubString}, s::JSON.String)
-    s, i = s.s, s.i
+Base.convert(::Type{SubString}, s::JSON.String) = parse_string(s.s, s.i)[1]
+
+function parse_string(s, i)
     last_i, has_escape = scan_string(s, i)
     if !has_escape
-        return SubString(s, i+1, prevind(s, last_i))
+        return SubString(s, i+1, prevind(s, last_i)), last_i
     else
-        return unescape_string!(s, i+1, last_i-1)
+        return unescape_string!(s, i+1, last_i-1), last_i
     end
 end
+
 
 Base.convert(::Type{AbstractString}, s::JSON.String) =
     convert(Base.SubString, s)
@@ -46,7 +48,7 @@ unescape_c(c) = c == '"'  ? c :
                c == 'b'  ? UInt8('\b') :
                c == 'f'  ? UInt8('\f') :
                c == 'n'  ? UInt8('\n') :
-               c == 'r'  ? UInt8('\f') :
+               c == 'r'  ? UInt8('\r') :
                c == 't'  ? UInt8('\t') :
                c == 'u'  ? c : 0x00
 
@@ -81,11 +83,12 @@ Return a new String.
 function unescape_string!(s, i, l)
 
     out = Base.String(Vector{UInt8}(uninitialized, l - i))
-    j = 1 
+    j = 1
 
     c = getc(s, i)
 
-    utf16 = 0x0000
+    utf16lead = 0x0000
+    utf16lead_j = 0
 
     while i <= l
         if c == '\\' && i + 1 <= l
@@ -97,22 +100,24 @@ function unescape_string!(s, i, l)
                 c = uc
             else
                 i, c16 = unescape_hex4(s, i)
-                if utf16 != 0x0000
-                    c32 = UInt32(utf16 - 0xd7f7) << 10 + c16
-                    j = setc_utf8(out, j, c32)
-                    utf16 = 0x0000
-                elseif (c16 & 0xf800) == 0xd800
-                    utf16 = c16
+                if utf16lead_j > 0
+                    if c16 in 0xdc00:0xdfff
+                        c32 = UInt32(utf16lead - 0xd7f7) << 10 + c16
+                        j = setc_utf8(out, utf16lead_j, c32)
+                    else
+                        j = setc_utf8(out, j, c16)
+                    end
+                    utf16lead_j = 0
+                elseif c16 in 0xd800:0xdbff
+                    utf16lead = c16
+                    utf16lead_j = j
+                    j = setc_utf8(out, j, utf16lead)
                 else
                     j = setc_utf8(out, j, c16)
                 end
                 i, c = next_ic(s, i)
                 continue
             end
-        end
-        if utf16 != 0x0000
-            j = setc_utf8(out, j, utf16)
-            utf16 = 0x0000
         end
         j = setc(out, j, c)
         i, c = next_ic(s, i)
@@ -122,16 +127,57 @@ function unescape_string!(s, i, l)
     return SubString(out, 1, prevind(out, j))
 end
 
+function json_codeunit(s, i, c, l)
+
+    if c != '\\' || i + 1 > l
+        return i, c
+    end
+
+    i, c = next_ic(s, i)
+    uc = unescape_c(c)
+    if uc == 0x00 || uc == 'u' && i + 4 > l # FIXME test case for edge
+        return i, UInt8('\\')
+    end
+
+    if uc != 'u'
+        return i, uc
+    end
+
+    i, c16 = unescape_hex4(s, i)
+
+    # FIXME test case for edge: i + 6 <= l
+    if c16 in 0xd800:0xdbff &&
+       i + 6 <= l           &&
+       getc(s, i+1) == '\\' &&
+       getc(s, i+u) == 'u'
+
+        i, tail = unescape_hex4(s, i + 1)
+        if tail in 0xdc00:0xdfff
+            c32 = UInt32(c16 - 0xd7f7) << 10 + tail
+            return i, c32
+        end
+    end
+    return i, c16
+end
+
 
 """
 Write a Unicode chatacter `c` into a String `s` at byte index `i`.
 """
 function setc_utf8(s, i, c)
     bytes = bswap(reinterpret(UInt32, Char(c)))
-    while bytes != 0
+    while true
         setc(s, i, bytes % UInt8)
         i += 1
         bytes >>= 8
+        if bytes == 0
+            return i
+        end
     end
-    return i
 end
+
+is_overlong(u::UInt32) = (u >> 24 == 0xc0)   |
+                         (u >> 24 == 0xc1)   |
+                         (u >> 21 == 0x0704) |
+                         (u >> 20 == 0x0f08)
+

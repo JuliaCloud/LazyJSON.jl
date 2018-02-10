@@ -6,7 +6,6 @@ Base.convert(::Type{T}, a::JSON.Array) where T <: AbstractVector =
 
 #function Base.size(a::JSON.Array) = size(collect(a))
 
-
 Base.start(j::JSON.Array) = (j.i, Ref(0), 0x00)
 
 function Base.done(j::JSON.Array, (i, n, c))

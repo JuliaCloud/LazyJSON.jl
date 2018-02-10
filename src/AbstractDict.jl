@@ -1,6 +1,7 @@
 
 Base.convert(::Type{T}, o::JSON.Object) where T <: AbstractDict =
-    convert(T, Dict(convert(SubString, k) => v for (k,v) in o))
+    convert(T, Dict{SubString{String},Any}(
+               convert(SubString, k) => v for (k,v) in o))
 
 Base.Dict(o::JSON.Object) = convert(Dict, o)
 

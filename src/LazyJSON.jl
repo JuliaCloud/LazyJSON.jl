@@ -1,5 +1,7 @@
 module LazyJSON
 
+using DataStructures
+
 const JSON = LazyJSON
 
 const enable_assertions = false
@@ -49,12 +51,13 @@ promotejson(x; kw...) = x
 promotejson(n::JSON.Number) = convert(Base.Number, n)
 promotejson(s::JSON.String) = convert(AbstractString, s)
 promotejson(a::JSON.Array)  = convert(Vector, a)
-promotejson(o::JSON.Object) = convert(Dict, o)
+promotejson(o::JSON.Object) = convert(OrderedDict, o)
 
 rpromotejson(x) = promotejson(x)
-rpromotejson(a::JSON.Array) = [rpromotejson(x) for x in a]
-rpromotejson(o::JSON.Object) = [rpromotejson(k) => rpromotejson(v)
-                                for (k,v) in o]
+rpromotejson(a::JSON.Array) = Any[rpromotejson(x) for x in a]
+rpromotejson(o::JSON.Object) =
+    OrderedDict{SubString{Base.String},Any}(convert(SubString,k) =>
+                                            rpromotejson(v) for (k,v) in o)
 
 
 
@@ -80,9 +83,63 @@ function getvalue(s, i, c=getc(s, i))
     end
 end
 
-getvalue(s) = getvalue(s, skip_whitespace(s)...)
+function parse(s, path=nothing; lazy = true)
+    i, c = skip_whitespace(s)
+    if path != nothing
+        v = getpath(s, path, i, c)
+    else
+        v = getvalue(s, i, c)
+    end
+    return lazy ? v : flatten(v)
+end
 
-parse(s) = getvalue(s)
+
+"""
+Get a flattened Julia object for a value in a JSON text;
+and the index of the last character of the value
+"""
+
+function getflat(s, i, c = getc(s, i))
+        if c == '{'                     flat_object(s, i)
+    elseif c == '['                     flat_array(s, i)
+    elseif c == '"'                     parse_string(s, i)
+    elseif isnum(c)                     parse_number(s, i)
+    elseif c == 'f'                     false, i + 4
+    elseif c == 'n'                     nothing, i + 3
+    elseif c == 't'                     true, i + 3
+    else
+        throw(ParseError(s, i, "invalid value index"))
+    end
+end
+
+flatten(v) = v
+flatten(v::Value) = getflat(v.s, v.i)[1]
+
+
+function flat_object(s, i)
+    o = OrderedDict{SubString{Base.String},Any}()
+    i, c = skip_noise(s, i + 1)
+    while c != '}'
+        k, i = parse_string(s, i)
+        i, c = skip_noise(s, i + 1)
+        v, i = getflat(s, i, c)
+        o[k] = v
+        i, c = skip_noise(s, i + 1)
+    end
+    return o, i
+end
+
+function flat_array(s, i)
+    a = Any[]
+    i, c = skip_noise(s, i + 1)
+    while c != ']'
+        v, i = getflat(s, i, c)
+        push!(a, v)
+        i, c = skip_noise(s, i + 1)
+    end
+    return a, i
+end
+
 
 
 # JSON Object/Array Iterator
@@ -199,8 +256,6 @@ function getpath(s, path, i::Int, c::UInt8=getc(s, i))
 end
 
 getpath(j::JSON.Collection, path) = getpath(j.s, path, j.i)
-
-getpath(s, path) = getpath(s, path, skip_whitespace(s)...)
 
 
 

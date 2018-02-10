@@ -6,16 +6,29 @@ Methods are also defined for basic arithmetic operators: +, -, *, /, and ^.
 Promotion rules are defined to promote JSON.Number to `Int64` and `Float64`.
 """
 
-function Base.convert(::Type{Base.Number}, n::JSON.Number)
-    s = string(n)
-    v = tryparse(Int, s)
+#FIXME
+#https://github.com/JuliaComputing/TextParse.jl
+#https://github.com/JuliaLang/julia/issues/24015
+
+Base.convert(::Type{Base.Number}, n::JSON.Number) = parse_number(n.s, n.i)[1]
+
+function parse_number(s, i)
+    last_i = lastindex_of_number(s, i)
+    ss = SubString(s, i, last_i)
+    v = tryparse(Int, ss)
     if v == nothing
-        v = tryparse(Float64, s)
+        v = tryparse(Int128, ss)
     end
     if v == nothing
-        v = BigFloat(convert(Base.String, s))
+        v = tryparse(BigInt, ss)
     end
-    return v
+    if v == nothing || v >=0 && getc(s, i) == '-' # for -0
+        v = tryparse(Float64, ss)
+    end
+    if v == nothing
+        v = tryparse(BigFloat, ss)
+    end
+    return v, last_i
 end
 
 function Base.convert(::Type{T}, n::JSON.Number) where T <: Union{Int64, Float64}
