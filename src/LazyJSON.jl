@@ -191,18 +191,6 @@ end
 
 memcmp(a, b, l) = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, l)
 
-function keymemcmp(keyp, keyl, s, l, i)
-    last = i + keyl + 1
-    return last < l &&
-           getc(s, last) == '"' &&
-           memcmp(pointer(s, i + 1), keyp, keyl) == 0
-#= FIXME
- - compare up to first escape sequence?
- - compare function that transparently evaluates escapes?
-=#
-end
-
-
 function get_ic(o::JSON.Object, key::AbstractString, default)
 
     key1 = getc(key, 1)
@@ -213,21 +201,24 @@ function get_ic(o::JSON.Object, key::AbstractString, default)
     i, c = skip_noise(s, o.i + 1)
 
     while c != '}'
-
         last_i, has_escape = scan_string(s, i)
-        if has_escape
-            foundkey = key == JSON.String(s, i)
-        else
-            foundkey = key1 == c &&
-                       last_i == i + keyl &&
-                       keyl == 1 || memcmp(pointer(s, i+2), keyp, keyl-1) == 0
+        if keyl == 0
+            foundkey = last_i == i + 1
+        elseif has_escape
+            foundkey = key == JSON.String(s, i)           # {"key": ...}
+        else                                              #  ^   ^
+            foundkey = last_i == i + 1 + keyl &&          #  i   last_i
+                       key1 == getc(s, i + 1) &&
+                       (keyl == 1 || memcmp(pointer(s, i+2), keyp, keyl-1) == 0)
         end
+#        @show Char(key1), key, Char(c), i, foundkey, SubString(o.s, i, lastindex_of_value(o.s, i))
+
         i, c = skip_noise(s, last_i + 1)
 
         if foundkey
             return i, c
         end
-        
+
         i = lastindex_of_value(s, i, c)
         i, c = skip_noise(s, i + 1)
     end
