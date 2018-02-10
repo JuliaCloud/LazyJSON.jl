@@ -24,6 +24,20 @@ Base.String(s::JSON.String) = convert(Base.String, s)
 Base.SubString(s::JSON.String) = convert(Base.SubString, s)
 
 
+Base.IteratorSize(::Type{JSON.String{T}}) where T = Base.SizeUnknown()
+
+Base.ncodeunits(s::JSON.String) = scan_string(s.s, s.i)[1] - s.i - 1
+
+Base.isvalid(s::JSON.String, i::Integer) = string_index_isvalid(s.s, s.i + i)
+
+Base.codeunit(s::JSON.String, i::Integer) = codeunit(s.s, s.i + i)
+
+function Base.next(s::JSON.String, i::Integer)
+    i, c = json_char(s.s, s.i + i)
+    #println("next(::JSON.String, $i) -> $(Char(c)), $(i - s.i + 1)")
+    return c, i - s.i + 1
+end
+
 
 # Unescaping JSON Strings
 
@@ -85,57 +99,42 @@ function unescape_string!(s, i, l)
     out = Base.String(Vector{UInt8}(uninitialized, l - i))
     j = 1
 
-    c = getc(s, i)
-
-    utf16lead = 0x0000
-    utf16lead_j = 0
+    local c = getc(s, i)
 
     while i <= l
-        if c == '\\' && i + 1 <= l
-            i, c = next_ic(s, i)
-            uc = unescape_c(c)
-            if uc == 0x00 || uc == 'u' && i + 4 > l
-                j = setc(out, j, UInt8('\\'))
-            elseif uc != 'u'
-                c = uc
+        if c != '\\' || i + 1 > l
+            j = setc(out, j, c)
+        else
+            last_i, cp = json_unescape_char(s, i, c, l)
+            if i == last_i
+                j = setc(out, j, cp)
             else
-                i, c16 = unescape_hex4(s, i)
-                if utf16lead_j > 0
-                    if c16 in 0xdc00:0xdfff
-                        c32 = UInt32(utf16lead - 0xd7f7) << 10 + c16
-                        j = setc_utf8(out, utf16lead_j, c32)
-                    else
-                        j = setc_utf8(out, j, c16)
-                    end
-                    utf16lead_j = 0
-                elseif c16 in 0xd800:0xdbff
-                    utf16lead = c16
-                    utf16lead_j = j
-                    j = setc_utf8(out, j, utf16lead)
-                else
-                    j = setc_utf8(out, j, c16)
-                end
-                i, c = next_ic(s, i)
-                continue
+                i = last_i
+                j = setc_utf8(out, j, cp)
             end
         end
-        j = setc(out, j, c)
         i, c = next_ic(s, i)
     end
-    setc(out, j, 0x00)
 
     return SubString(out, 1, prevind(out, j))
 end
 
-function json_codeunit(s, i, c, l)
+function json_char(s, i, c = getc(s,i), l = sizeof(s))::Tuple{Int, Char}
 
     if c != '\\' || i + 1 > l
-        return i, c
+        c = s[i]
+        return nextind(s, i) - 1, s[i]
     end
+
+    i, c = json_unescape_char(s, i, c, l)
+    return i, Char(c)
+end
+
+function json_unescape_char(s, i, c, l)::Tuple{Int, Union{UInt8,UInt16,UInt32}}
 
     i, c = next_ic(s, i)
     uc = unescape_c(c)
-    if uc == 0x00 || uc == 'u' && i + 4 > l # FIXME test case for edge
+    if uc == 0x00 || uc == 'u' && i + 4 > l
         return i, UInt8('\\')
     end
 
@@ -144,20 +143,82 @@ function json_codeunit(s, i, c, l)
     end
 
     i, c16 = unescape_hex4(s, i)
-
-    # FIXME test case for edge: i + 6 <= l
     if c16 in 0xd800:0xdbff &&
        i + 6 <= l           &&
        getc(s, i+1) == '\\' &&
-       getc(s, i+u) == 'u'
+       getc(s, i+2) == 'u'
 
-        i, tail = unescape_hex4(s, i + 1)
+        j, tail = unescape_hex4(s, i+2)
         if tail in 0xdc00:0xdfff
             c32 = UInt32(c16 - 0xd7f7) << 10 + tail
-            return i, c32
+            return j, c32
         end
     end
     return i, c16
+end
+
+function isescape(s, i)
+    if getc(s, i) != '\\'
+        return false
+    end
+    j = i - 1
+    while j > 0 && getc(s, j) == '\\'
+        j -= 1   
+    end
+    return (i - j) % 2 != 0
+end
+
+ishexdigit(c::UInt8) = c in UInt8('0'):UInt8('9') ||
+                       c in UInt8('A'):UInt8('F') ||
+                       c in UInt8('a'):UInt8('f')
+
+
+function string_index_isvalid(s, i)
+
+    c = getc(s, i)
+
+    if (c == '"'  ||
+        c == '\\' ||
+        c == '/'  ||
+        c == 'n'  ||
+        c == 'r'  ||
+        c == 't'  ||
+        c == 'b'  ||
+        c == 'f'  ||
+        c == 'u') &&                    # Escapable character preceded by
+        isescape(s, i - 1)              # escape are not a valid index.
+
+        return false
+    end
+
+    if c == '\\' &&                     # \uXXXX sequence is invalid if it
+       getc(s, i + 1) == 'u' &&         # it is preceded by another \uXXXX
+       i > 6 &&                         # sequence ...
+       getc(s, i - 5) == 'u' &&
+       isescape(s, i - 6)
+
+        _, a = unescape_hex4(s, i - 5)
+        _, b = unescape_hex4(s, i + 1)
+
+        if a in 0xd800:0xdbff &&        # ... and if the two form a valid UTF16
+           b in 0xdc00:0xdfff           # surrogate pair.
+
+            return false
+        end
+    end
+
+    if ishexdigit(c)                    # A index pointing to a hex digit is
+        j = i                           # invalid if part of a \uXXXX sequence.
+        m = max(3, i - 3)
+        while (c = getc(s, j); ishexdigit(c)) && j >= m
+            j -= 1
+        end
+        if c == 'u' && isescape(s, j - 1)
+           return false 
+        end
+    end
+
+    return isvalid(s, i)
 end
 
 
@@ -175,9 +236,3 @@ function setc_utf8(s, i, c)
         end
     end
 end
-
-is_overlong(u::UInt32) = (u >> 24 == 0xc0)   |
-                         (u >> 24 == 0xc1)   |
-                         (u >> 21 == 0x0704) |
-                         (u >> 20 == 0x0f08)
-

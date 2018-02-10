@@ -11,7 +11,7 @@ const enable_assertions = false
 # JSON Value Types
 # Represented by a string and a byte index.
 
-struct String{T <: AbstractString} #<: AbstractString
+struct String{T <: AbstractString} <: AbstractString
     s::T
     i::Int
 end
@@ -191,7 +191,7 @@ end
 
 memcmp(a, b, l) = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, l)
 
-function keycmp(keyp, keyl, s, l, i)
+function keymemcmp(keyp, keyl, s, l, i)
     last = i + keyl + 1
     return last < l &&
            getc(s, last) == '"' &&
@@ -205,21 +205,33 @@ end
 
 function get_ic(o::JSON.Object, key::AbstractString, default)
 
-    keyp = pointer(key)
+    key1 = getc(key, 1)
+    keyp = pointer(key, 2)
     keyl = sizeof(key)
-    s = o.s
-    l = sizeof(s)
-    foundkey = false
-    count = 1
 
-    for (i, c) in indexes(o)
-        if count % 2 == 1
-            foundkey = keycmp(keyp, keyl, s, l, i)
-        elseif foundkey
+    s = o.s
+    i, c = skip_noise(s, o.i + 1)
+
+    while c != '}'
+
+        last_i, has_escape = scan_string(s, i)
+        if has_escape
+            foundkey = key == JSON.String(s, i)
+        else
+            foundkey = key1 == c &&
+                       last_i == i + keyl &&
+                       keyl == 1 || memcmp(pointer(s, i+2), keyp, keyl-1) == 0
+        end
+        i, c = skip_noise(s, last_i + 1)
+
+        if foundkey
             return i, c
         end
-        count += 1
+        
+        i = lastindex_of_value(s, i, c)
+        i, c = skip_noise(s, i + 1)
     end
+
     return default
 end
 

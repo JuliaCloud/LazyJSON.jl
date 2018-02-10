@@ -11,6 +11,8 @@ const JSON = LazyJSON
 
 @testset "JSON" begin
 
+include("AbstractString.jl")
+
 """
 https://tools.ietf.org/html/rfc7159#section-13
 """
@@ -47,8 +49,7 @@ x = v["Image"]["Width"]
 
 x = v["Image"]["Thumbnail"]["Url"]
 
-# JSON.String does not yet implement AbstractString
-@test_broken x == "http://www.example.com/image/481989943"
+@test x == "http://www.example.com/image/481989943"
 
 @test SubString(x) == "http://www.example.com/image/481989943"
 
@@ -85,6 +86,37 @@ end
 
 end # testset
 
+
+#-------------------------------------------------------------------------------
+@testset "Escaped values in keys" begin
+#-------------------------------------------------------------------------------
+
+json = """
+    {
+        "Image\t Tab": {
+            "Width":  800,
+            "Height": 600,
+            "Title":  "View from 15th Floor",
+            "Thumb\\nail": {
+                "\\ud83e\\udd16 Url": "http://www.example.com/image/481989943",
+                "Height": 125,
+                "Width":  100
+            },
+            "Animated" : false,
+            "IDs": [116, 943, 234, 38793]
+        }
+    }
+"""
+
+
+v = JSON.parse(json)
+
+x = v["Image\t Tab"]["Thumb\nail"]["🤖 Url"]
+
+@test x == "http://www.example.com/image/481989943"
+
+
+end # testset
 
 
 #-------------------------------------------------------------------------------
