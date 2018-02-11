@@ -260,8 +260,8 @@ simply returns a `LazyJSON.Value` object with `s = jsontext` and `i = 1`.
     String: {"foo": 1,    "bar": [1, 2, 3, "four"]}
             ▲                    ▲      ▲  ▲
             │                    │      │  │
-            ├────────────────┐   │      │  │
-            │ LazyJSON.Array(s,  i=9)   │  │   == Any[1, 2, 3, "four"]
+            ├─────────────────┐  │      │  │
+            │ LazyJSON.Array( s, i=9)   │  │   == Any[1, 2, 3, "four"]
             │                           │  │
             ├─────────────────┐  ┌──────┘  │
             │ LazyJSON.Number(s, i=16)     │   == 3
