@@ -165,7 +165,7 @@ collection and value objects.
 The `test/benchmark.jl` test uses a [1MB AWS API definition JSON file](https://github.com/samoconnor/jsonhack/blob/master/test/ec2-2016-11-15.normal.json)
 to compare performance vs JSON.jl.  When accessing a value close to the
 start of the file the lazy parser is orders of magnitude faster than JSON.jl,
-for values near then end of the file, the lazy parser is about times faster.
+for values near then end of the file, the lazy parser is about 6 times faster.
 (Each test case is run once for JIT warmup, then 190 times for measurement.)
 
 ```
