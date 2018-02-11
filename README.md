@@ -10,15 +10,15 @@ an object representing the value(s) from a JSON text.
 
 ```julia
 LazyJSON.value(jsontext::AbstractString) -> Union{Bool,
-                                                  JSON.Number,
-                                                  JSON.String,
-                                                  JSON.Array,
-                                                  JSON.Object,
+                                                  LazyJSON.Number,
+                                                  LazyJSON.String,
+                                                  LazyJSON.Array,
+                                                  LazyJSON.Object,
                                                   Nothing}
-JSON.Number <: Base.Number
-JSON.String <: AbstractString
-JSON.Array  <: AbstractVector{Any}
-JSON.Object <: AbstractDict{AbstractString,Any}
+LazyJSON.Number <: Base.Number
+LazyJSON.String <: AbstractString
+LazyJSON.Array  <: AbstractVector{Any}
+LazyJSON.Object <: AbstractDict{AbstractString,Any}
 ```
 
 e.g.
@@ -108,44 +108,169 @@ julia> @time f(j)
 
 LazyJSON's `AbstractString` and `Number` implementations are lazy too.
 
-The text of a `JSON.Number` is not parsed to `Int64` or `Float64` form until it
-is needed for a numeric operation. If the number is only used in a textual
-context, it need never be parsed at all. e.g.
+The text of a `LazyJSON.Number` is not parsed to `Int64` or `Float64` form
+until it is needed for a numeric operation. If the number is only used in a
+textual context, it need never be parsed at all. e.g.
 
 ```julia
 j = LazyJSON.value(jsontext)
 html = """<img width=$(j["width"]), height=$(j["height"])>"""
 ```
 
-Likewise, the content of a `JSON.String` is not interpreted until it is
-accessed. If a `JSON.String` containing complex UTF16 escape sequences is
+Likewise, the content of a `LazyJSON.String` is not interpreted until it is
+accessed. If a `LazyJSON.String` containing complex UTF16 escape sequences is
 compared to a UTF8 `Base.String`, and the two strings differ in the first
-few characters, then the comparison will terminate before the bulk of the
-unescaping work is done.
+few characters, then the comparison will terminate before the any unescaping
+work needs to be done.
 
+
+
+# LazyJSON.Array Performance Considerations
+
+## LazyJSON.Array Performance
+
+The `LazyJSON.Array` does not keep track of the indices of its items.
+Every `array[i]` access scans all the values in the array until it reaches
+the `i`th value. This is fast if you only need to access a single item,
+even near the end of the array, because the alternative of transforming the
+`LazyJSON.ARray` into a `Base.Array` must scan the entire array and allocate
+new memory for each item. It is also fast to access multiple items near the
+start of the array. However, if you need random access to many items in a large
+array it is better to convert it to a `Base.Array`.
+
+e.g.
+```
+v = LazyJSON.value(jsontext)["foo"]["bar"]["an_array"]
+v = convert(Vector{Any}, v)
+```
+
+If you need to access the items in the array sequentially, the iteration
+interface is very efficient, but incrementing an index is very inefficient. 
+`length(::LazyJSON.Array)` is also inefficient, in that it must scan the whole
+array.
+
+e.g.
+```julia
+v = LazyJSON.value(jsontext)["foo"]["bar"]["an_array"]
+for i in v ✅
+    println(i)
+end
+
+r = map(i -> f(i), v) ✅ 
+
+i = 1
+while i < length(v) ❌
+    println(v[i]) ❌
+end
+```
+
+
+## LazyJSON.Object Performance
+
+The performance considerations for `LazyJSON.Object` are similar to those
+described above for `LazyJSON.Array`. The `LazyJSON.Object` does not keep a
+hash table of keys. Every `object["key"]` access scans all the keys in the
+object until it finds a match. Accessing a keys in an object with a small
+number of keys is efficient. Accessing a few keys in an object with many keys
+is effiecient. However, if you need random acess to many keys in a large object
+it is better to convert it to a `Base.Dict`.
+
+e.g.
+```julia
+v = LazyJSON.value(jsontext)["foo"]["bar"]["an_object_with_many_keys"]
+v = convert(Dict, v)
+```
+
+`length(::LazyJSON.Object)` is inefficient, in that it must scan the whole
+object.
+If you need to access the key value pairs sequentially, the iteration
+interface is very efficient.
+
+e.g.
+
+```julia
+o = LazyJSON.value(jsontext)["foo"]["bar"]["an_object_with_many_keys"]
+for (k, v) in o ✅
+    println(k, v)
+end
+
+r = filter((k, v) -> contains(i, r".jpg$", o)) ✅ 
+
+for k in long_list_of_keys
+    println(o[k]) ❌
+end
+
+d = convert(Dict, o)
+for k in long_list_of_keys
+    println(d[k]) ✅
+end
+```
+
+
+## LazyJSON.Number Performance
+
+Whenever a `LazyJSON.Number` is used in a numeric operation it must be parsed
+from its string form into an `Int` or a `Float`. If you are only using each
+each numetic value once, there is no performance penalty, as the string is only
+parsed once. However if you need to use the numeric value many times, it is
+better to convert it to a normal `Base` number type.
+
+e.g.
+```julia
+i = LazyJSON.value(jsontext)["foo"]
+x = origin.x + i["width"],  ✅ used once in an addition operation
+y = origin.y + i["height"]  ✅ "
+draw(i["data"], x, y)
+
+
+
+limit = LazyJSON.value(jsontext)["foo"]["limit"]
+i = 0
+while i < limit ❌ re-parsed every time the less than operation is evaluated
+    i += 1 
+    ...
+end
+limit = convert(Int, LazyJSON.value(jsontext)["foo"]["limit"]) ✅
+
+
+v = LazyJSON.value(jsontext)["foo"]["ammounts"]
+total = sum(v) ✅ iteration is efficient, each number is parsed once.
+
+
+struct Foo
+    x::Int
+    y::Int
+end
+i = LazyJSON.value(jsontext)["foo"]
+Foo(i["x"], i["y"]) ✅ converted to `Int` on assignment to struct fields.
+
+
+v = LazyJSON.value(jsontext)["foo"]["values"]
+ints = convert(Vector{Int}, v) ✅ manual conversion when needed
+```
 
 
 # Implementation
 
 Values are represented by a reference to the JSON text `String`
 and the byte index of the value text. The `LazyJSON.value(jsontext)` function
-simply returns a `JSON.Value` object with `s = jsontext` and `i = 1`.
+simply returns a `LazyJSON.Value` object with `s = jsontext` and `i = 1`.
 
 ```
-    String: {"foo": 1, "bar": [1, 2, 3, "four"]}
-            ▲                 ▲      ▲  ▲
-            │                 │      │  │
-            ├──────────────┐  │      │  │
-            │   JSON.Array(s, i=9)   │  │   == Any[1, 2, 3, "four"]
-            │                        │  │
-            ├───────────────┐  ┌─────┘  │
-            │   JSON.Number(s, i=16)    │   == 3
-            │                           │
-            ├───────────────┐  ┌────────┘
-            │   JSON.String(s, i=19)        == "four"
+    String: {"foo": 1,   "bar": [1, 2, 3, "four"]}
+            ▲                   ▲      ▲  ▲
+            │                   │      │  │
+            ├──────────────┐    │      │  │
+            │ LazyJSON.Array(s, i=9)   │  │   == Any[1, 2, 3, "four"]
+            │                          │  │
+            ├───────────────┐  ┌───────┘  │
+            │ LazyJSON.Number(s, i=16)    │   == 3
+            │                             │
+            ├───────────────┐  ┌──────────┘
+            │ LazyJSON.String(s, i=19)        == "four"
             │
             └───────────────┬──┐
-                JSON.Object(s, i=1)
+              LazyJSON.Object(s, i=1)
 ```
 
 LazyJSON does not parse and translate values into concrete Julia `Number`,
