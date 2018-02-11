@@ -71,12 +71,12 @@ text until values are requested through the `AbstractVector` and `AbstractDict`
 interfaces.
 
 i.e. `j = LazyJSON.value(jsontext)` does no parsing and immediately
-returns a value wrapper object.
+returns a thin wrapper object.
 
 `j["foo"]` calls `get(::AbstractDict, "foo")`, which parses just enough to find
 the `"foo"` field.
 
-`j["foo"][4]` calls `getindex(::AbstractArray, 4), which continues paring up to
+`j["foo"][4]` calls `getindex(::AbstractArray, 4)`, which continues paring up to
 the fourth item in the array.
 
 This results in much less memory allocation compared to non-lazy parsers:
