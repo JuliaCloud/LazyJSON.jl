@@ -128,8 +128,8 @@ unescaping work is done.
 # Implementation
 
 Values are represented by a reference to the JSON text `String`
-and the byte index of the value text. `LazyJSON.value(jsontext)` simply
-returns a `JSON.Value` object with `s = jsontext` and `i = 1`.
+and the byte index of the value text. The `LazyJSON.value(jsontext)` function
+simply returns a `JSON.Value` object with `s = jsontext` and `i = 1`.
 
 ```
     String: {"foo": 1, "bar": [1, 2, 3, "four"]}
