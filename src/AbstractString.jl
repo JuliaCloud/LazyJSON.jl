@@ -1,4 +1,4 @@
-# AbstractString interface methods
+# AbstractString interface for JSON.String
 
 """
 Processes escape sequences and return a `Base.Substring`
@@ -26,6 +26,9 @@ Base.String(s::JSON.String) = convert(Base.String, s)
 Base.SubString(s::JSON.String) = convert(Base.SubString, s)
 
 
+
+# Abstract String Interface
+
 Base.IteratorSize(::Type{JSON.String{T}}) where T = Base.SizeUnknown()
 
 Base.ncodeunits(s::JSON.String) = scan_string(s.s, s.i)[1] - s.i - 1
@@ -36,7 +39,6 @@ Base.codeunit(s::JSON.String, i::Integer) = codeunit(s.s, s.i + i)
 
 function Base.next(s::JSON.String, i::Integer)
     i, c = json_char(s.s, s.i + i)
-    #println("next(::JSON.String, $i) -> $(Char(c)), $(i - s.i + 1)")
     return c, i - s.i + 1
 end
 
@@ -80,7 +82,7 @@ const unhex_1000 = unhex_1 * 0x1000
 
 
 """
-Read 4HEXDIG from a String `s` at byte index `i`.
+Read 4HEXDIG from a String `s` at byte index `i` + 1.
 FIXME more instructions but less memory access might be faster. Need to test.
 """
 function unescape_hex4(s, i)
@@ -121,6 +123,11 @@ function unescape_string!(s, i, l)
     return SubString(out, 1, prevind(out, j))
 end
 
+
+"""
+Return a `Char` from a JSON string `s` at index `i`.
+Unescpe character if needed.
+"""
 function json_char(s, i, c = getc(s,i), l = sizeof(s))::Tuple{Int, Char}
 
     if c != '\\' || i + 1 > l
@@ -132,49 +139,66 @@ function json_char(s, i, c = getc(s,i), l = sizeof(s))::Tuple{Int, Char}
     return i, Char(c)
 end
 
+
+"""
+Return the character code for an escaped character in a JSON string `s`
+starting at index `i` (the `\\` character).
+"""
 function json_unescape_char(s, i, c, l)::Tuple{Int, Union{UInt8,UInt16,UInt32}}
 
     i, c = next_ic(s, i)
     uc = unescape_c(c)
-    if uc == 0x00 || uc == 'u' && i + 4 > l
-        return i, UInt8('\\')
+    if uc == 0x00 ||                    # If the character after '\' was not
+       uc == 'u' && i + 4 > l           # escapable, or if there aren't enough
+        return i, UInt8('\\')           # bytes for \uXXXX, leave the \ as0is.
     end
 
-    if uc != 'u'
-        return i, uc
+    if uc != 'u'                        # Simple single ecaped character.
+        return i, uc                    # Return 7-bit character code.
     end
 
-    i, c16 = unescape_hex4(s, i)
-    if c16 in 0xd800:0xdbff &&
+    i, c16 = unescape_hex4(s, i)        # \uXXXX escaped UTF16 codepoint.
+    if c16 in 0xd800:0xdbff &&          # Check for surrogate pair...
        i + 6 <= l           &&
        getc(s, i+1) == '\\' &&
        getc(s, i+2) == 'u'
 
         j, tail = unescape_hex4(s, i+2)
         if tail in 0xdc00:0xdfff
-            c32 = UInt32(c16 - 0xd7f7) << 10 + tail
+            c32 = UInt32(c16 - 0xd7f7)  # Recombine surrogate pair to produce
+            c32 <<= 10                  # 32-bit character code.
+            c32 += tail
             return j, c32
         end
     end
-    return i, c16
+    return i, c16                       # Return 16-bit character code.
 end
 
+
+"""
+Is `i` the index of the start of an escape sequence in a JSON string `s`?
+Yes if s[i] == '\\', unless the escape is escaped itself.
+"""
 function isescape(s, i)
-    if getc(s, i) != '\\'
+    if getc(s, i) != '\\'               # Check for the escape character.
         return false
     end
     j = i - 1
-    while j > 0 && getc(s, j) == '\\'
-        j -= 1   
-    end
-    return (i - j) % 2 != 0
+    while j > 0 && getc(s, j) == '\\'   # Count the number of preceding escapes.
+        j -= 1                          # "foo \\\\\uXXXX"
+    end                                 #     ^    ^
+    return (i - j) % 2 == 1             #     j    i  -- (i - j)=5 % 2 = 1
 end
 
-ishexdigit(c::UInt8) = c in UInt8('0'):UInt8('9') ||
-                       c in UInt8('A'):UInt8('F') ||
-                       c in UInt8('a'):UInt8('f')
 
-
+"""
+Is `i` the index of the start of a character sequence in a JSON string `s`?
+A valid `i` can point to:
+ - a single-byte (7-bit) character;
+ - a '\\X' escaped 7-bit character;
+ - the start of a multi-byte UTF8 character;
+ - the start of a `\\uXXXX` escaped UTF16 character;
+"""
 function string_index_isvalid(s, i)
 
     c = getc(s, i)
@@ -193,7 +217,7 @@ function string_index_isvalid(s, i)
         return false
     end
 
-    if c == '\\' &&                     # \uXXXX sequence is invalid if it
+    if c == '\\' &&                     # \uXXXX sequence is invalid if
        getc(s, i + 1) == 'u' &&         # it is preceded by another \uXXXX
        i > 6 &&                         # sequence ...
        getc(s, i - 5) == 'u' &&
@@ -223,9 +247,14 @@ function string_index_isvalid(s, i)
     return isvalid(s, i)
 end
 
+ishexdigit(c::UInt8) =
+    c in UInt8('0'):UInt8('9') ||
+    c in UInt8('A'):UInt8('F') ||
+    c in UInt8('a'):UInt8('f')
+
 
 """
-Write a Unicode chatacter `c` into a String `s` at byte index `i`.
+Write a Unicode chatacter `c` into a String `s` as UTF8 at byte index `i`.
 """
 function setc_utf8(s, i, c)
     bytes = bswap(reinterpret(UInt32, Char(c)))

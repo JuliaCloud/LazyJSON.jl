@@ -1,4 +1,4 @@
-# AbstractArray interface methods
+# AbstractArray interface for JSON.Array
 
 Base.IteratorSize(::Type{JSON.Array{T}}) where T = Base.SizeUnknown()
 Base.IteratorEltype(::Type{JSON.Array{T}}) where T = Base.EltypeUnknown()

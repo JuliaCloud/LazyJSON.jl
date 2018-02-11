@@ -1,15 +1,32 @@
 module LazyJSON
 
-using DataStructures
+using DataStructures: OrderedDict
 
 const JSON = LazyJSON
-
-const enable_assertions = false
 
 
 
 # JSON Value Types
-# Represented by a string and a byte index.
+
+"""
+Values are represented by a reference to the JSON text `String`
+and the byte index of the value text.
+
+    String: {"foo": 1, "bar": [1, 2, 3, "four"]}
+            ▲                 ▲      ▲  ▲
+            │                 │      │  │
+            ├──────────────┐  │      │  │
+            │   JSON.Array(s, i=9)   │  │   == Any[1, 2, 3, "four"]
+            │                        │  │
+            ├───────────────┐  ┌─────┘  │
+            │   JSON.Number(s, i=16)    │   == 3
+            │                           │
+            ├───────────────┐  ┌────────┘
+            │   JSON.String(s, i=19)        == "four"
+            │
+            └───────────────┬──┐
+                JSON.Object(s, i=1)
+"""
 
 struct String{T <: AbstractString} <: AbstractString
     s::T
@@ -34,6 +51,31 @@ end
 const Value = Union{JSON.String, JSON.Number, JSON.Object, JSON.Array}
 const Collection = Union{JSON.Object, JSON.Array}
 
+"""
+Verbatim JSON text of a `JSON.Value`
+"""
+Base.string(s::JSON.Value) = SubString(s.s, s.i, lastindex_of_value(s.s, s.i))
+
+
+
+# Get Typed JSON Value
+
+"""
+    value(jsontext) -> JSON.Value
+    JSON.Value <: Union{Number, AbstractString, AbstractVector, AbstractDict}
+
+Create a `JSON.Value` object from a JSON text.
+"""
+function value(s::Union{Base.String,SubString{String}}, path=nothing; lazy=true)
+    i, c = skip_whitespace(s)
+    if path != nothing
+        v = getpath(s, path, i, c)
+    else
+        v = getvalue(s, i, c)
+    end
+    return lazy ? v : flatten(v)
+end
+
 struct ParseError <: Exception
     bytes::Base.String
     index::Int
@@ -41,27 +83,6 @@ struct ParseError <: Exception
 end
 
 
-"""
-Verbatim JSON text of a `JSON.Value`
-"""
-Base.string(s::JSON.Value) = SubString(s.s, s.i, lastindex_of_value(s.s, s.i))
-
-
-promotejson(x; kw...) = x
-promotejson(n::JSON.Number) = convert(Base.Number, n)
-promotejson(s::JSON.String) = convert(AbstractString, s)
-promotejson(a::JSON.Array)  = convert(Vector, a)
-promotejson(o::JSON.Object) = convert(OrderedDict, o)
-
-rpromotejson(x) = promotejson(x)
-rpromotejson(a::JSON.Array) = Any[rpromotejson(x) for x in a]
-rpromotejson(o::JSON.Object) =
-    OrderedDict{SubString{Base.String},Any}(convert(SubString,k) =>
-                                            rpromotejson(v) for (k,v) in o)
-
-
-
-# Get Typed JSON Value
 
 """
 Get a JSON value object for a value in a JSON text.
@@ -69,7 +90,6 @@ Get a JSON value object for a value in a JSON text.
  - `i`, byte index of the value in JSON text.
  - `c`, first byte of the value.
 """
-
 function getvalue(s, i, c=getc(s, i))
         if c == '{'                     JSON.Object(s, i)
     elseif c == '['                     JSON.Array(s, i)
@@ -83,22 +103,33 @@ function getvalue(s, i, c=getc(s, i))
     end
 end
 
-function parse(s, path=nothing; lazy = true)
-    i, c = skip_whitespace(s)
-    if path != nothing
-        v = getpath(s, path, i, c)
-    else
-        v = getvalue(s, i, c)
-    end
-    return lazy ? v : flatten(v)
-end
-
 
 """
-Get a flattened Julia object for a value in a JSON text;
-and the index of the last character of the value
+See `LazyJSON.value(jsontext) -> JSON.Value`.
 """
+parse(a...; kw...) = value(a...; kw...)
 
+
+
+# Promotion to Base Container types
+
+"""
+Promote a JSON.Vaue to an equivalent Base type.
+"""
+promotejson(x; kw...) = x
+promotejson(n::JSON.Number) = convert(Base.Number, n)
+promotejson(s::JSON.String) = convert(AbstractString, s)
+promotejson(a::JSON.Array)  = convert(Vector, a)
+promotejson(o::JSON.Object) = convert(OrderedDict, o)
+
+
+
+# Flattening to Base Container types
+
+"""
+Get a flattened (non-lazy) Julia object for a value in a JSON text;
+and the index of the last character of the value.
+"""
 function getflat(s, i, c = getc(s, i))
         if c == '{'                     flat_object(s, i)
     elseif c == '['                     flat_array(s, i)
@@ -144,9 +175,16 @@ end
 
 # JSON Object/Array Iterator
 
+"""
+Iterate over the byte-indexes of the values in a JSON Array,
+or the byte-indexes of the alternating field names and values in a JSON Object.
+"""
 struct Indexes{T}
     j::T
 end
+
+Base.IteratorSize(::Type{Indexes{T}}) where T = Base.SizeUnknown()
+Base.IteratorEltype(::Type{Indexes{T}}) where T = Base.EltypeUnknown()
 
 indexes(j::T) where T <: JSON.Collection = Indexes{T}(j)
 
@@ -166,9 +204,10 @@ function nextindex(j, i, c)
 end
 
 
-Base.IteratorSize(::Type{Indexes{T}}) where T = Base.SizeUnknown()
-Base.IteratorEltype(::Type{Indexes{T}}) where T = Base.EltypeUnknown()
-
+"""
+Count the number of values in an Array or Object.
+For an Object, the count includes the field names.
+"""
 function collection_length(c::JSON.Collection)
     count = -1
     for i in indexes(c)
@@ -180,13 +219,16 @@ end
 
 # JSON Array Lookup
 
+"""
+Get the index `i` and first byte `c` of the `n`th value in an Array.
+"""
 function getindex_ic(a::JSON.Array, n::Int)
-    for (i, c) in indexes(a)
-        if c == ']'
+    for (i, c) in indexes(a)            # Iterate over byte-indexs of array
+        if c == ']'                     # values until the end byte ']'.
            throw(BoundsError(a, n))
         end
         if n == 1
-            return i, c
+            return i, c                 # Return the byte-index of the nth value
         end
         n -= 1
     end
@@ -198,18 +240,21 @@ end
 
 memcmp(a, b, l) = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, l)
 
+"""
+Get the index `i` and first byte `c` of the field value for `key` in an Object.
+"""
 function get_ic(o::JSON.Object, key::AbstractString, default)
 
-    key1 = getc(key, 1)
-    keyp = pointer(key, 2)
-    keyl = sizeof(key)
+    key1 = getc(key, 1)                           # Extract 1st byte of key,
+    keyp = pointer(key, 2)                        # cache pointer to remainder
+    keyl = sizeof(key)                            # of key and length of key.
 
-    s = o.s
-    i, c = skip_noise(s, o.i + 1)
+    s = o.s                                       # Skip from "begin" byte '{'
+    i, c = skip_noise(s, o.i + 1)                 # to first field name byte.
 
     while c != '}'
-        last_i, has_escape = scan_string(s, i)
-        if keyl == 0
+        last_i, has_escape = scan_string(s, i)    # Find end of field name and
+        if keyl == 0                              # compare to `key.
             foundkey = last_i == i + 1
         elseif has_escape
             foundkey = key == JSON.String(s, i)           # {"key": ...}
@@ -219,14 +264,14 @@ function get_ic(o::JSON.Object, key::AbstractString, default)
                        (keyl == 1 || memcmp(pointer(s, i+2), keyp, keyl-1) == 0)
         end
 
-        i, c = skip_noise(s, last_i + 1)
+        i, c = skip_noise(s, last_i + 1)          # Skip ':' and whitespace.
 
-        if foundkey
-            return i, c
+        if foundkey                               # If the key matched, return
+            return i, c                           # index of first value byte.
         end
 
-        i = lastindex_of_value(s, i, c)
-        i, c = skip_noise(s, i + 1)
+        i = lastindex_of_value(s, i, c)           # Skip over the value and the
+        i, c = skip_noise(s, i + 1)               # ',' and whitespace.
     end
 
     return default
@@ -501,23 +546,6 @@ setc(s, i, c) = (unsafe_store!(pointer(s), c, i); i + 1)
 
 # Debug Display
 
-Base.show(io::IO, j::Union{JSON.String, JSON.Number}) =
-    show(io, promotejson(j))
-
-const showmax = 1000
-
-#=
-function Base.show(io::IO, j::JSON.Collection)
-    s = string(j)
-    if length(s) > showmax
-        print(io, typeof(j), ": ", SubString(s, 1, showmax), " ...")
-    else
-        print(io, typeof(j), ": ", s)
-    end
-end
-=#
-
-
 function Base.show(io::IO, e::JSON.ParseError)
 
     s = e.bytes
@@ -535,6 +563,8 @@ function Base.show(io::IO, e::JSON.ParseError)
 end
 
 
+
+# Interface Protocols
 
 include("AbstractString.jl")
 include("Number.jl")

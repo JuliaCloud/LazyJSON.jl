@@ -1,4 +1,4 @@
-# Number interface methods
+# Base.Number interface for JSON.Number
 
 """
 `convert(Base.Number, JSON.Number)` parses the number string and returns
@@ -7,12 +7,11 @@
 Methods are also defined for basic arithmetic operators: +, -, *, /, and ^.
 Promotion rules are defined to promote JSON.Number to `Int64` and `Float64`.
 """
+Base.convert(::Type{Base.Number}, n::JSON.Number) = parse_number(n.s, n.i)[1]
 
-#FIXME
+#FIXME parsing a number be more efficient than calling tryparse 5 times.
 #https://github.com/JuliaComputing/TextParse.jl
 #https://github.com/JuliaLang/julia/issues/24015
-
-Base.convert(::Type{Base.Number}, n::JSON.Number) = parse_number(n.s, n.i)[1]
 
 function parse_number(s, i)
     last_i = lastindex_of_number(s, i)
@@ -62,3 +61,5 @@ Base.promote_rule(
     ::Type{T}, ::Type{JSON.Number{S}}) where {S, T <: Integer} = Int64
 Base.promote_rule(
     ::Type{T}, ::Type{JSON.Number{S}}) where {S, T <: AbstractFloat} = Float64
+
+Base.show(io::IO, n::JSON.Number) = print(io, string(n))

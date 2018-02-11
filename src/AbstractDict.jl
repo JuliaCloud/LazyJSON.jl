@@ -1,4 +1,4 @@
-# AbstractDict interface methods
+# AbstractDict interface for JSON Object
 
 Base.IteratorSize(::Type{JSON.Object{T}}) where T = Base.SizeUnknown()
 Base.IteratorEltype(::Type{JSON.Object{T}}) where T = Base.EltypeUnknown()
@@ -34,7 +34,7 @@ Base.start(j::JSON.Object) = (j.i, Ref(0), 0x00)
 
 function Base.done(j::JSON.Object, (i, n, c))
     i, c = nextindex(j, i, n, c)
-    return c == ']' || c == '}'
+    return c == '}'
 end
 
 function Base.next(j::JSON.Object, (i, n, c))
