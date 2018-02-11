@@ -81,6 +81,7 @@ the fourth item in the array.
 
 This results in much less memory allocation compared to non-lazy parsers:
 
+JSON.jl: 
 ```julia
 j = String(read("ec2-2016-11-15.normal.json"))
 julia> function f(json)
@@ -91,8 +92,10 @@ julia> function f(json)
 julia> @time f(j)
   0.066773 seconds (66.43 k allocations: 7.087 MiB)
 "Availability Zone"
+```
 
-
+LazyJSON.jl:
+```julia
 julia> function f(json)
            v = LazyJSON.parse(json)
            v["shapes"]["scope"]["enum"][1]
