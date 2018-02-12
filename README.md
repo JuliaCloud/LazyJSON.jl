@@ -81,7 +81,7 @@ the fourth item in the array.
 
 This results in much less memory allocation compared to non-lazy parsers:
 
-JSON.jl: 
+JSON.jl:
 ```julia
 j = String(read("ec2-2016-11-15.normal.json"))
 julia> function f(json)
@@ -145,7 +145,7 @@ v = convert(Vector{Any}, v)
 ```
 
 If you need to access the items in the array sequentially, the iteration
-interface is very efficient, but incrementing an index is very inefficient. 
+interface is very efficient, but incrementing an index is very inefficient.
 `length(::LazyJSON.Array)` is also inefficient, in that it must scan the whole
 array.
 
@@ -156,7 +156,7 @@ for i in v ✅
     println(i)
 end
 
-r = map(i -> f(i), v) ✅ 
+r = map(i -> f(i), v) ✅
 
 i = 1
 while i < length(v) ❌
@@ -194,7 +194,7 @@ for (k, v) in o ✅
     println(k, v)
 end
 
-r = filter((k, v) -> contains(i, r".jpg$", o)) ✅ 
+r = filter((k, v) -> contains(i, r".jpg$", o)) ✅
 
 for k in long_list_of_keys
     println(o[k]) ❌
@@ -227,7 +227,7 @@ draw(i["data"], x, y)
 limit = LazyJSON.value(jsontext)["foo"]["limit"]
 i = 0
 while i < limit ❌ re-parsed every time the less than operation is evaluated
-    i += 1 
+    i += 1
     ...
 end
 limit = convert(Int, LazyJSON.value(jsontext)["foo"]["limit"]) ✅
@@ -278,6 +278,24 @@ LazyJSON does not parse and translate values into concrete Julia `Number`,
 conform to the protocols of `Base.Number`, `AbstractString`, `AbstractVector`
 and `AbstractDict`.  These methods interpret the JSON text on the fly and parse
 only as much as is needed return the requested values.
+
+
+
+# Large JSON Texts
+
+LazyJSON can process JSON files that are too big to fit in available RAM
+by using the `mmap` interface.
+
+e.g.
+```
+using Mmap
+f = open("huge_file_that_wont_fit_in_ram.json", "r")
+s = String(Mmap.mmap(f))
+j = LazyJSON.value(s)
+v = j["foo"]["bar"]
+```
+The operating stytem will lazily load enough chunks of the file into RAM to
+reach field `"bar"` of opject `"foo"`.
 
 
 
