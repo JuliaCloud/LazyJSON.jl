@@ -27,7 +27,6 @@ and the byte index of the value text.
             └───────────────┬──┐
                 JSON.Object(s, i=1)
 """
-
 struct String{T <: AbstractString} <: AbstractString
     s::T
     i::Int
@@ -466,7 +465,6 @@ https://tools.ietf.org/html/rfc7159#section-2
         name-separator  = ws %x3A ws  ; : colon
         value-separator = ws %x2C ws  ; , comma
 """
-
 isbegin(c) = c == '{' ||
              c == '['
 
@@ -477,7 +475,6 @@ isend(c) = c == '}' ||
 First character of a Start of a JSON Number
 https://tools.ietf.org/html/rfc7159#section-6
 """
-
 isnum(c) = c == '-' ||
            c in UInt8('0'):UInt8('9')
 
@@ -494,7 +491,6 @@ https://tools.ietf.org/html/rfc7159#section-2
             %x0A /              ; Line feed or New line
             %x0D )              ; Carriage return
 """
-
 iswhitespace(c) = c == ' '  ||
                   c == '\t' ||
                   c == '\r' ||
