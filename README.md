@@ -125,7 +125,7 @@ work needs to be done.
 
 
 
-# LazyJSON.Array Performance Considerations
+# LazyJSON Performance Considerations
 
 ## LazyJSON.Array Performance
 
