@@ -3,9 +3,13 @@ module LazyJSONBenchmark
 using LazyJSON
 using JSON
 
+using Mmap
+
 function go()
 
-j = String(read("ec2-2016-11-15.normal.json"))
+#j = String(read("ec2-2016-11-15.normal.json"))
+f = open("ec2-2016-11-15.normal.json", "r")
+j = String(Mmap.mmap(f))
 
 
 for n in [1, 190]

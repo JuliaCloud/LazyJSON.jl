@@ -245,8 +245,8 @@ Get the index `i` and first byte `c` of the field value for `key` in an Object.
 """
 function get_ic(o::JSON.Object, key::AbstractString, default)
 
-    key1 = getc(key, 1)                           # Extract 1st byte of key,
-    keyp = pointer(key, 2)                        # cache pointer to remainder
+    key1 = getc(key, 1)                           # Extract 1st byte of key.
+    keyp = pointer(key, 2)                        # Cache pointer to remainder
     keyl = sizeof(key)                            # of key and length of key.
 
     s = o.s                                       # Skip from "begin" byte '{'
