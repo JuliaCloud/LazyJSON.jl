@@ -2,6 +2,7 @@ module LazyJSONBenchmark
 
 using LazyJSON
 using JSON
+using JSON2
 
 using Mmap
 
@@ -38,6 +39,14 @@ GC.gc()
             ]["shape"] |> String == "AcceptReservedInstancesExchangeQuoteRequest"
 end
 
+n > 1 && print("JSON2.jl:    ")
+GC.gc()
+@time for i in 1:n
+    r = JSON2.read(j)
+    @assert r.operations.AcceptReservedInstancesExchangeQuote.input.shape ==
+           "AcceptReservedInstancesExchangeQuoteRequest"
+end
+
 println("\n")
 n > 1 && println("Access 2 values close to end:")
 
@@ -58,6 +67,15 @@ GC.gc()
     r = r["shapes"]["scope"]["enum"]
     @assert r[1] |> String == "Availability Zone"
     @assert r[2] |> String == "Region"
+end
+
+n > 1 && print("JSON2.jl:    ")
+GC.gc()
+@time for i in 1:n
+    r = JSON2.read(j)
+    r = r.shapes.scope.enum
+    @assert r[1] == "Availability Zone"
+    @assert r[2] == "Region"
 end
 
 
