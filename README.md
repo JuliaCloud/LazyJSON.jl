@@ -31,7 +31,7 @@ LazyJSON.Object with 2 entries:
   "foo" => Any[1, 2, 3, "four"]
   "bar" => nothing
 
-julia> j["foo"][4]
+julia> j["foo"]
 4-element LazyJSON.Array:
  1
  2
@@ -41,8 +41,30 @@ julia> j["foo"][4]
 julia> j["foo"][4]
 "four"
 
-julia> typeof(x["bar"])
+julia> typeof(j["bar"])
 Nothing
+```
+
+The fields of JSON objects can also be accessed using `'.'` (`getproperty)
+syntax.
+
+e.g.
+```
+julia> j.foo
+4-element LazyJSON.Array:
+ 1
+ 2
+ 3
+  "four"
+
+julia> j.foo[4]
+"four"
+
+julia> typeof(j.bar)
+Nothing
+
+julia> j.missing
+ERROR: KeyError: key "missing" not found
 ```
 
 _For compatibility with other JSON interfaces that have a `parse` function,
