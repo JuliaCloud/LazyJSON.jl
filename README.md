@@ -45,7 +45,7 @@ julia> typeof(j["bar"])
 Nothing
 ```
 
-The fields of JSON objects can also be accessed using `'.'` (`getproperty)
+The fields of JSON objects can also be accessed using `'.'` (`getproperty`)
 syntax.
 
 e.g.
