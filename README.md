@@ -158,7 +158,7 @@ The `LazyJSON.Array` does not keep track of the indices of its items.
 Every `array[i]` access scans all the values in the array until it reaches
 the `i`th value. This is fast if you only need to access a single item,
 even near the end of the array, because the alternative of transforming the
-`LazyJSON.ARray` into a `Base.Array` must scan the entire array and allocate
+`LazyJSON.Array` into a `Base.Array` must scan the entire array and allocate
 new memory for each item. It is also fast to access multiple items near the
 start of the array. However, if you need random access to many items in a large
 array it is better to convert it to a `Base.Array`.
@@ -244,9 +244,8 @@ e.g.
 ```julia
 i = LazyJSON.value(jsontext)["foo"]
 x = origin.x + i["width"],  ✅ used once in an addition operation
-y = origin.y + i["height"]  ✅ "
+y = origin.y + i["height"]  ✅
 draw(i["data"], x, y)
-
 
 
 limit = LazyJSON.value(jsontext)["foo"]["limit"]
