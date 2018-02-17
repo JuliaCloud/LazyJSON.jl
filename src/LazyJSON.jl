@@ -604,6 +604,8 @@ function convert_to_immutable(T::Type, o::JSON.Object)
 end
 
 
+Base.convert(::Type{Any}, o::JSON.Object) = o
+
 function Base.convert(T::Type, o::JSON.Object)
     if T.mutable
         return convert_to_mutable(T, o)
