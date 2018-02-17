@@ -35,6 +35,7 @@ Base.ncodeunits(s::JSON.String) = scan_string(s.s, s.i)[1] - s.i - 1
 
 Base.isvalid(s::JSON.String, i::Integer) = string_index_isvalid(s.s, s.i + i)
 
+Base.codeunit(s::JSON.String) = codeunit(s.s)
 Base.codeunit(s::JSON.String, i::Integer) = codeunit(s.s, s.i + i)
 
 function Base.next(s::JSON.String, i::Integer)
