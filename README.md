@@ -311,7 +311,7 @@ LazyJSON can process JSON files that are too big to fit in available RAM
 by using the `mmap` interface.
 
 e.g.
-```
+```julia
 using Mmap
 f = open("huge_file_that_wont_fit_in_ram.json", "r")
 s = String(Mmap.mmap(f))
