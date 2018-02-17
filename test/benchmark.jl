@@ -2,7 +2,7 @@ module LazyJSONBenchmark
 
 using LazyJSON
 using JSON
-using JSON2
+#using JSON2
 
 using Mmap
 
@@ -21,11 +21,11 @@ n > 1 && println("Access value close to start:")
 n > 1 && print("LazyJSON.jl:")
 GC.gc()
 @time for i in 1:n
-    r = SubString(LazyJSON.parse(j,
+    r = LazyJSON.parse(j,
                ["operations",
                 "AcceptReservedInstancesExchangeQuote",
                 "input",
-                "shape"]))
+                "shape"])
     @assert r == "AcceptReservedInstancesExchangeQuoteRequest"
 end
 
@@ -39,6 +39,7 @@ GC.gc()
             ]["shape"] |> String == "AcceptReservedInstancesExchangeQuoteRequest"
 end
 
+#=
 n > 1 && print("JSON2.jl:    ")
 GC.gc()
 @time for i in 1:n
@@ -46,6 +47,7 @@ GC.gc()
     @assert r.operations.AcceptReservedInstancesExchangeQuote.input.shape ==
            "AcceptReservedInstancesExchangeQuoteRequest"
 end
+=#
 
 println("\n")
 n > 1 && println("Access 2 values close to end:")
@@ -53,8 +55,7 @@ n > 1 && println("Access 2 values close to end:")
 n > 1 && print("LazyJSON.jl:")
 GC.gc()
 @time for i in 1:n
-    r = LazyJSON.parse(j, ["shapes", "scope"]; lazy=false)
-    r = r["enum"]
+    r = LazyJSON.parse(j).shapes.scope.enum
     @assert SubString(r[1]) == "Availability Zone"
     @assert SubString(r[2]) == "Region"
 end
@@ -69,6 +70,7 @@ GC.gc()
     @assert r[2] |> String == "Region"
 end
 
+#=
 n > 1 && print("JSON2.jl:    ")
 GC.gc()
 @time for i in 1:n
@@ -77,6 +79,7 @@ GC.gc()
     @assert r[1] == "Availability Zone"
     @assert r[2] == "Region"
 end
+=#
 
 
 println("\n")

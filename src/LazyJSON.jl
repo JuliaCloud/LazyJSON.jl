@@ -4,6 +4,17 @@ using DataStructures: OrderedDict
 
 const JSON = LazyJSON
 
+const enable_getproperty = true
+
+include("PropertyDicts.jl")
+using .PropertyDicts: PropertyDict
+
+
+@static if enable_getproperty
+    wrap_object(o) = PropertyDict(o)
+else
+    wrap_object(o) = o
+end
 
 
 # JSON Value Types
@@ -32,7 +43,7 @@ struct String{T <: AbstractString} <: AbstractString
     i::Int
 end
 
-struct Number{T <: AbstractString} <: Base.Number
+struct Number{T <: AbstractString} <: Base.Real
     s::T
     i::Int
 end
@@ -83,6 +94,7 @@ end
 
 
 
+
 """
 Get a JSON value object for a value in a JSON text.
  - `s`, the JSON text.
@@ -90,7 +102,7 @@ Get a JSON value object for a value in a JSON text.
  - `c`, first byte of the value.
 """
 function getvalue(s, i, c=getc(s, i))
-        if c == '{'                     JSON.Object(s, i)
+        if c == '{'                     wrap_object(JSON.Object(s, i))
     elseif c == '['                     JSON.Array(s, i)
     elseif c == '"'                     JSON.String(s, i)
     elseif isnum(c)                     JSON.Number(s, i)
@@ -143,6 +155,7 @@ function getflat(s, i, c = getc(s, i))
 end
 
 flatten(v) = v
+flatten(v::PropertyDict) = flatten(PropertyDicts.unwrap(v))
 flatten(v::Value) = getflat(v.s, v.i)[1]
 
 
@@ -290,22 +303,19 @@ Find the value at a specified key `path` in a JSON text.
 """
 function getpath(s, path, i::Int, c::UInt8=getc(s, i))
 
-    v = getvalue(s, i, c)
-
     for key in path
-        if v isa JSON.Array && key isa Integer
-            i, c = getindex_ic(v, key)
-        elseif v isa JSON.Object && key isa AbstractString
-            i, c = get_ic(v, key, (0, 0x00))
+        if c == '[' && key isa Integer
+            i, c = getindex_ic(JSON.Array(s, i), key)
+        elseif c == '{' && key isa AbstractString
+            i, c = get_ic(JSON.Object(s, i), key, (0, 0x00))
             if i == 0
                 throw(KeyError(key))
             end
         else
             throw(KeyError(key))
         end
-        v = getvalue(s, i, c)
     end
-    return v
+    return getvalue(s, i, c)
 end
 
 getpath(j::JSON.Collection, path) = getpath(j.s, path, j.i)
