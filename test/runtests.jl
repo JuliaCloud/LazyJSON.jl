@@ -16,7 +16,6 @@ include("AbstractString.jl")
 """
 https://tools.ietf.org/html/rfc7159#section-13
 """
-
 rfc_example = """
     {
         "Image": {
@@ -41,7 +40,7 @@ rfc_example = """
 
 v = JSON.parse(rfc_example)
 
-@test v isa JSON.Object
+@test v isa JSON.Object || v isa LazyJSON.PropertyDict
 
 x = v["Image"]["Width"]
 @test x == 800
@@ -97,7 +96,7 @@ v = JSON.parse(j)
 @test v[1] == "JSON Test Pattern pass1"
 @test v[2]["object with 1 member"][1] == "array with 1 element"
 @test length(v[3]) == 0
-@test v[3] isa JSON.Object
+@test v[3] isa JSON.Object || v[3] isa LazyJSON.PropertyDict
 @test [x for x in v[4]] == Any[]
 @test v[4] isa JSON.Array
 @test v[5] == -42
