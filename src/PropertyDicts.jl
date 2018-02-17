@@ -44,14 +44,20 @@ end
 Base.getproperty(d::PropertyDict, n) = getindex(d, n)
 
 
-Base.IteratorSize(::Type{PropertyDict{T}}) where T = IteratorSize(T)
-Base.IteratorEltype(::Type{PropertyDict{T}}) where T = IteratorEltype(T)
+Base.IteratorSize(::Type{PropertyDict{K,V,T}}) where {K,V,T} = Base.IteratorSize(T)
+Base.IteratorEltype(::Type{PropertyDict{K,V,T}}) where {K,V,T} = Base.IteratorEltype(T)
 Base.getindex(d::PropertyDict, i) = getindex(unwrap(d), i)
 Base.get(d::PropertyDict, k, default) = get(unwrap(d), k, default)
 Base.length(d::PropertyDict) = length(unwrap(d))
 Base.start(d::PropertyDict) = start(unwrap(d))
 Base.done(d::PropertyDict, i) = done(unwrap(d), i)
 Base.next(d::PropertyDict, i) = next(unwrap(d), i)
+
+
+Base.convert(::Type{Any}, d::PropertyDict) = d
+Base.convert(::Type{PropertyDict{K,V,T}}, d::PropertyDict{K,V,T}) where {K,V,T<:AbstractDict{K,V}} = d
+Base.convert(T::Type, d::PropertyDict) = convert(T, PropertyDicts.unwrap(d))
+
 
 
 end # module PropertyDicts

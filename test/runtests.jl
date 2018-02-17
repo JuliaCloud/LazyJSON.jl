@@ -9,6 +9,21 @@ end
 
 const JSON = LazyJSON
 
+struct Foo
+    a::Int
+    b
+end
+
+mutable struct Bar
+    f::Foo
+    v::Vector{Int}
+    s::AbstractString
+    s2::String
+    ov::Vector{Foo}
+end
+
+
+
 @testset "JSON" begin
 
 include("AbstractString.jl")
@@ -34,13 +49,77 @@ rfc_example = """
 """
 
 
+
+#-------------------------------------------------------------------------------
+@testset "convert" begin
+#-------------------------------------------------------------------------------
+
+j = LazyJSON.value("""{
+    "f": {"a": 1, "b": "foo"},
+    "v": [1,2,3,4,5],
+    "s": "Hello",
+    "s2": "World!",
+    "ov": [
+        {"a": 1, "b": true},
+        {"a": 2, "b": false},
+        {"a": 3, "b": null}
+    ]
+}""")
+
+@test j isa JSON.Object || j isa JSON.PropertyDict
+@test j.f.a == 1
+@test j.f.b == "foo"
+@test j.v == [1, 2, 3, 4, 5]           ;@test j.v isa JSON.Array
+@test j.s == "Hello"                   ;@test j.s isa JSON.String
+@test j.s2 == "World!"                 ;@test j.s2 isa JSON.String
+@test j.ov[1].a == 1                   ;@test j.ov[1] isa JSON.PropertyDict
+@test j.ov[1].b == true
+@test j.ov[2].a == 2
+@test j.ov[2].b == false
+@test j.ov[3].a == 3
+@test j.ov[3].b == nothing
+
+
+v = convert(Bar, j)
+
+@test v isa Bar
+@test v.f.a == 1
+@test v.f.b == "foo"
+@test v.v == [1, 2, 3, 4, 5]           ;@test v.v isa Vector{Int}
+@test v.s == "Hello"                   ;@test v.s isa JSON.String
+@test v.s2 == "World!"                 ;@test v.s2 isa Base.String
+@test v.ov[1] == Foo(1, true)          ;@test v.ov[1] isa Foo
+@test v.ov[2] == Foo(2, false)
+@test v.ov[3] == Foo(3, nothing)
+
+
+d = convert(Dict, j)
+
+@test d isa Dict{AbstractString,Any}
+@test d["f"].a == 1
+@test d["f"].b == "foo"
+@test d["v"] == [1, 2, 3, 4, 5]
+@test d["s"] == "Hello"                ;@test d["s"] isa JSON.String
+@test d["s2"] == "World!"              ;@test d["s2"] isa JSON.String
+@test d["ov"][1].a == 1                ;@test d["ov"][1] isa JSON.PropertyDict
+@test d["ov"][1].b == true
+@test d["ov"][2].a == 2
+@test d["ov"][2].b == false
+@test d["ov"][3].a == 3
+@test d["ov"][3].b == nothing
+
+
+end #testset
+
+
+
 #-------------------------------------------------------------------------------
 @testset "RFC7159 example" begin
 #-------------------------------------------------------------------------------
 
 v = JSON.parse(rfc_example)
 
-@test v isa JSON.Object || v isa LazyJSON.PropertyDict
+@test v isa JSON.Object || v isa JSON.PropertyDict
 
 x = v["Image"]["Width"]
 @test x == 800
@@ -96,7 +175,7 @@ v = JSON.parse(j)
 @test v[1] == "JSON Test Pattern pass1"
 @test v[2]["object with 1 member"][1] == "array with 1 element"
 @test length(v[3]) == 0
-@test v[3] isa JSON.Object || v[3] isa LazyJSON.PropertyDict
+@test v[3] isa JSON.Object || v[3] isa JSON.PropertyDict
 @test [x for x in v[4]] == Any[]
 @test v[4] isa JSON.Array
 @test v[5] == -42

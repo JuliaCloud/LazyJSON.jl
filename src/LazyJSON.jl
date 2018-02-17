@@ -550,6 +550,96 @@ setc(s, i, c) = (unsafe_store!(pointer(s), c, i); i + 1)
 
 
 
+# Struct Filling
+
+"""
+Convert a `JSON.Object` to a `mutable struct T`.
+"""
+function convert_to_mutable(T::Type, o::JSON.Object)
+
+    r = ccall(:jl_new_struct_uninit, Any, (Any,), T)
+
+    for (k, v) in o
+        Base.setproperty!(r, Symbol(k), v)
+    end
+
+    return r
+end
+
+
+"""
+Convert a `JSON.Object` to a `struct T`.
+Optimised for the case where the order of the JSON fields matches the struct.
+"""
+function convert_to_immutable(T::Type, o::JSON.Object)
+
+    count = fieldcount(T)
+    values = Vector{Any}(uninitialized, count)
+
+    i = 1
+    for (k, v) in o
+        j = i                           # Start at the first struct field.
+        while true
+            f = fieldname(T, j)
+            if symcmp(k, f)             # If we're lucky, `k` matches the `j`th
+                values[j] = v           # struct field and we save the value.
+                i = j
+                break
+            end                         # If the JSON fields are out of order
+            j += 1                      # we have to search...
+            if j > count
+                j = 1                   # After last field, start again at 1.
+            end
+            if j == i                   # Wrapped around to `i`!
+                break                   # Give up.
+            end
+        end
+        i += 1
+        if i > count
+            i = 1
+        end
+    end
+
+    return T(values...)
+end
+
+
+function Base.convert(T::Type, o::JSON.Object)
+    if T.mutable
+        return convert_to_mutable(T, o)
+    else
+        return convert_to_immutable(T, o)
+    end
+end
+
+
+Base.convert(::Type{JSON.Object{T}},
+                 v::JSON.Object{T}) where T <: AbstractString = v
+
+
+"""
+Is `JSON.String` `a` equal to `Symbol` `b` ?
+Assumes that `a` does not contain escape sequences.
+"""
+function symcmp(a::JSON.String, b::Symbol)
+    pa = pointer(a.s, a.i+1)
+    pb = Base.unsafe_convert(Ptr{UInt8}, b)
+    i = 1
+    while true
+        ca = unsafe_load(pa, i)
+        cb = unsafe_load(pb, i)
+        if ca == '"' && cb == 0x00
+            return true
+        end
+        if ca != cb
+            return false
+        end
+        i += 1
+    end
+end
+
+
+
 # Debug Display
 
 function Base.show(io::IO, e::JSON.ParseError)

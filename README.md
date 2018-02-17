@@ -52,23 +52,47 @@ The fields of JSON objects can also be accessed using `'.'` (`getproperty`)
 syntax.
 
 e.g.
-```
+```julia
 julia> j.foo
 4-element LazyJSON.Array:
  1
  2
  3
   "four"
-
-julia> j.foo[4]
-"four"
-
-julia> typeof(j.bar)
-Nothing
-
-julia> j.missing
-ERROR: KeyError: key "missing" not found
 ```
+
+JSON Objects can be converted to `struct` types.
+
+e.g.
+```julia
+julia> struct Point
+           x::Int
+           y::Int
+       end
+
+julia> struct Line
+           a::Point
+           b::Point
+       end
+
+julia> struct Arrow
+           label::String
+           segments::Vector{Line}
+           dashed::Bool
+       end
+
+julia> convert(Arrow, LazyJSON.value("""{
+           "label": "Hello",
+           "segments": [
+                {"a": {"x": 1, "y": 1}, "b": {"x": 2, "y": 2}},
+                {"a": {"x": 2, "y": 2}, "b": {"x": 3, "y": 3}}
+            ],
+            "dashed": false
+       }"""))
+Arrow("Hello", Line[Line(Point(1, 1), Point(2, 2)), Line(Point(2, 2), Point(3, 3))], false)
+```
+
+
 
 _For compatibility with other JSON interfaces that have a `parse` function,
 `LazyJSON.parse` is provided as an alias for `LazyJSON.value`. e.g._

@@ -16,8 +16,8 @@ function parse_string(s, i)
 end
 
 
-Base.convert(::Type{AbstractString}, s::JSON.String) =
-    convert(Base.SubString, s)
+#Base.convert(::Type{AbstractString}, s::JSON.String) =
+#    convert(Base.SubString, s)
 
 Base.convert(::Type{Base.String}, s::JSON.String) =
     convert(Base.String, convert(Base.SubString, s))

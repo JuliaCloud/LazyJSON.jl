@@ -3,6 +3,8 @@
 Base.IteratorSize(::Type{JSON.Object{T}}) where T = Base.SizeUnknown()
 Base.IteratorEltype(::Type{JSON.Object{T}}) where T = Base.EltypeUnknown()
 
+Base.convert(::Type{T}, o::JSON.Object) where T<:AbstractDict = T(o)
+
 
 # Access
 
