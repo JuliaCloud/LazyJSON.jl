@@ -3,8 +3,6 @@
 Base.IteratorSize(::Type{JSON.Object{T}}) where T = Base.SizeUnknown()
 Base.IteratorEltype(::Type{JSON.Object{T}}) where T = Base.EltypeUnknown()
 
-Base.convert(::Type{T}, o::JSON.Object) where T<:AbstractDict = T(o)
-
 
 # Access
 
@@ -45,4 +43,62 @@ function Base.next(j::JSON.Object, (i, n, c))
     i, c = nextindex(j, i, n, c)
     v = getvalue(j.s, i, c)
     return k => v, (i, n, c)
+end
+
+
+# Conversion to Dict Types
+
+Base.convert(::Type{Any}, o::JSON.Object) = o
+
+Base.convert(::Type{JSON.Object{T}},
+                 o::JSON.Object{T}) where T <: AbstractString = o
+
+Base.convert(::Type{T}, o::JSON.Object) where T<:AbstractDict = T(o)
+
+
+# Conversion to Struct Types
+
+#https://github.com/JuliaLang/julia/issues/26090
+isreserved(s::Symbol) = s in (
+    :while, :if, :for, :try, :return, :break, :continue,
+    :function, :macro, :quote, :let, :local, :global, :const, :do,
+    :struct,
+    :type, :immutable, :importall,  # to be deprecated
+    :module, :baremodule, :using, :import, :export,
+    :end, :else, :catch, :finally, :true, :false)
+
+unmangled_fieldnames(T) = [n[1] == '_' &&
+                           isreserved(Symbol(n[2:end])) ?  n[2:end] : n
+                           for n in map(Base.String, fieldnames(T))]
+
+"""
+Convert a `JSON.Object` to a `struct T`.
+Optimised for the case where the order of the JSON fields matches the struct.
+"""
+@generated function Base.convert(::Type{T}, o::JSON.Object) where T
+
+    fn = fieldnames(T)
+    fk = unmangled_fieldnames(T)
+
+    Expr(:block,
+         :(    i = o.i                          ),
+        (:(    (i, $n) = get_field(o, $k, i)    ) for (n,k) in zip(fn, fk))...,
+         :(    $T($(fn...))                     ))
+end
+
+"""
+Get a `field` from a `JSON.Object` starting at `start_i`.
+Returns `start_i` for next field and field value.
+"""
+function get_field(o::JSON.Object, field, start_i)
+    i, c = get_ic(o, field, (0, 0x00), start_i)
+    if i == 0
+        #throw(KeyError(field))
+        v = nothing
+        i = start_i
+    else
+        v = getvalue(o.s, i, c)
+        i = lastindex_of_value(o.s, i, c)
+    end
+    return i, v
 end

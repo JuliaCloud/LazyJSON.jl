@@ -55,7 +55,11 @@ n > 1 && println("Access 2 values close to end:")
 n > 1 && print("LazyJSON.jl:")
 GC.gc()
 @time for i in 1:n
-    r = LazyJSON.parse(j).shapes.scope.enum
+    if LazyJSON.enable_getproperty
+        r = LazyJSON.parse(j).shapes.scope.enum
+    else
+        r = LazyJSON.parse(j, ["shapes", "scope", "enum"])
+    end
     @assert SubString(r[1]) == "Availability Zone"
     @assert SubString(r[2]) == "Region"
 end

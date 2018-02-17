@@ -22,6 +22,35 @@ mutable struct Bar
     ov::Vector{Foo}
 end
 
+struct Geometry
+    _type
+    coordinates
+end
+
+struct CityLot
+    _type
+    properties
+    geometry::Geometry
+end
+
+struct Owner
+    login
+end
+
+struct Repo
+    id
+    name
+    owner::Owner
+    parent
+    full_name
+    private::Bool
+    url
+    language
+    pushed_at
+    permissions
+end
+
+
 
 
 @testset "JSON" begin
@@ -66,18 +95,22 @@ j = LazyJSON.value("""{
     ]
 }""")
 
+if LazyJSON.enable_getproperty
+
 @test j isa JSON.Object || j isa JSON.PropertyDict
 @test j.f.a == 1
 @test j.f.b == "foo"
 @test j.v == [1, 2, 3, 4, 5]           ;@test j.v isa JSON.Array
 @test j.s == "Hello"                   ;@test j.s isa JSON.String
 @test j.s2 == "World!"                 ;@test j.s2 isa JSON.String
-@test j.ov[1].a == 1                   ;@test j.ov[1] isa JSON.PropertyDict
+@test j.ov[1].a == 1
 @test j.ov[1].b == true
 @test j.ov[2].a == 2
 @test j.ov[2].b == false
 @test j.ov[3].a == 3
 @test j.ov[3].b == nothing
+
+end
 
 
 v = convert(Bar, j)
@@ -96,17 +129,17 @@ v = convert(Bar, j)
 d = convert(Dict, j)
 
 @test d isa Dict{AbstractString,Any}
-@test d["f"].a == 1
-@test d["f"].b == "foo"
+@test d["f"]["a"] == 1
+@test d["f"]["b"] == "foo"
 @test d["v"] == [1, 2, 3, 4, 5]
 @test d["s"] == "Hello"                ;@test d["s"] isa JSON.String
 @test d["s2"] == "World!"              ;@test d["s2"] isa JSON.String
-@test d["ov"][1].a == 1                ;@test d["ov"][1] isa JSON.PropertyDict
-@test d["ov"][1].b == true
-@test d["ov"][2].a == 2
-@test d["ov"][2].b == false
-@test d["ov"][3].a == 3
-@test d["ov"][3].b == nothing
+@test d["ov"][1]["a"] == 1
+@test d["ov"][1]["b"] == true
+@test d["ov"][2]["a"] == 2
+@test d["ov"][2]["b"] == false
+@test d["ov"][3]["a"] == 3
+@test d["ov"][3]["b"] == nothing
 
 
 end #testset
@@ -443,6 +476,69 @@ end # testset
     end
 
 end # testset
+
+
+#-------------------------------------------------------------------------------
+@testset "citylots" begin
+#-------------------------------------------------------------------------------
+
+json = """{
+"type": "FeatureCollection",
+"features": [
+{ "type": "Feature", "properties": { "MAPBLKLOT": "0001001", "BLKLOT": "0001001", "BLOCK_NUM": "0001", "LOT_NUM": "001", "FROM_ST": "0", "TO_ST": "0", "STREET": "UNKN
+OWN", "ST_TYPE": null, "ODD_EVEN": "E" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -122.422003528252475, 37.808480096967251, 0.0 ], [ -122.42207601332528
+1, 37.808835019815085, 0.0 ], [ -122.421102174348633, 37.808803534992904, 0.0 ], [ -122.421062569067274, 37.808601056818148, 0.0 ], [ -122.422003528252475, 37.8084800
+96967251, 0.0 ] ] ] } }
+,
+{ "type": "Feature", "properties": { "MAPBLKLOT": "0002001", "BLKLOT": "0002001", "BLOCK_NUM": "0002", "LOT_NUM": "001", "FROM_ST": "0", "TO_ST": "0", "STREET": "UNKN
+OWN", "ST_TYPE": null, "ODD_EVEN": "E" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -122.42082593937107, 37.808631474146033, 0.0 ], [ -122.420858049679694
+, 37.808795641369592, 0.0 ], [ -122.419811958704301, 37.808761809714007, 0.0 ], [ -122.42082593937107, 37.808631474146033, 0.0 ] ] ] } }
+
+]}"""
+
+
+v = convert(Vector{CityLot}, LazyJSON.value(json, ["features"]))
+
+@test v[1]._type == "Feature"
+@test v[1].properties["MAPBLKLOT"] == "0001001"
+
+@test v[2]._type == "Feature"
+@test v[2].properties["MAPBLKLOT"] == "0002001"
+@test v[2].geometry.coordinates[1][1][1] == -122.42082593937107
+
+end # testset
+
+
+#-------------------------------------------------------------------------------
+@testset "GitHub.jl" begin
+#-------------------------------------------------------------------------------
+
+    gist_json = """{
+      "id": 1296269,
+      "owner": {
+        "login": "octocat"
+      },
+      "parent": {
+        "name": "test-parent"
+      },
+      "full_name": "octocat/Hello-World",
+      "private": false,
+      "url": "https://api.github.com/repos/octocat/Hello-World",
+      "language": null,
+      "pushed_at": "2011-01-26T19:06:43Z",
+      "permissions": {
+        "admin": false,
+        "push": false,
+        "pull": true
+      }
+    }"""
+
+v = convert(Repo, LazyJSON.value(gist_json))
+
+@test v.owner.login == "octocat"
+
+
+end #testset
 
 
 #-------------------------------------------------------------------------------
