@@ -267,7 +267,7 @@ end # testset
 @testset "Escaped values in keys" begin
 #-------------------------------------------------------------------------------
 
-json = """
+json = Vector{UInt8}(codeunits("""
     {
         "Image\t Tab": {
             "Width":  800,
@@ -282,7 +282,7 @@ json = """
             "IDs": [116, 943, 234, 38793]
         }
     }
-"""
+"""))
 
 
 v = JSON.parse(json)
