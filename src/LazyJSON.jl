@@ -93,6 +93,17 @@ struct ParseError <: Exception
 end
 
 
+value(bytes, path=nothing; kw...) = value(Base.String(bytes), path; kw...)
+
+
+function value(io::IO, path=nothing; lazy=true)
+    FIXME
+    """
+    Options:
+        - AbstractString wrapper that reads more from the IO as needed?
+        - Exception handlers in the API functions that update String from IO?
+    """
+end
 
 
 """
