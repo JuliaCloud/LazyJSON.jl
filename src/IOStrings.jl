@@ -1,15 +1,44 @@
 module IOStrings
 
-const ASCII_ETB = 0x17
+"""
+`IOString` is an abstract string that accumulates bytes from an IO stream.
 
+`IOString(::IO)` creates a new `IOString` connected to an `IO` stream.
+
+`pump(::IOString)` reads bytes from the `IO` stream into the string.
+
+`incomplete(::IOString)` is true until the `IO` stream reaches `eof()`.
+
+`pump(::Function, ::IOString)` runs a `Function` until it returns or throws
+a recoverable error. When a recoverable error is thrown, more data is read
+from the `IO` stream and the `Function` is restarted (the function is assumed
+to be idempotent or free of side effects).
+
+`recoverable(e) -> Bool` defines which errors are recoverable.
+
+It the following example, `parse_item` is called repeatedly to parse items
+from the string `s` at index `i`. When the parser gets to the end of the string
+and throws an error, the `IOString` is pumped to retrieve more data and the
+parsing continues.
+```
+IOString.recoverable(::MyUnexpectedEndOfInput) = true
+s = IOString(socket)
+i = 1
+while !eof(socket)
+    i, v = pump(()->MyParser.parse_item(s, i), s)
+    println(v)
+end
+```
+"""
 struct IOString{T <: IO} <: AbstractString
     io::T
     buf::IOBuffer
-    etype::Type
 end
 
-function IOString(io::T, etype) where T <: IO
-    ios = IOString{T}(io, IOBuffer(), etype)
+const ASCII_ETB = 0x17
+
+function IOString(io::T) where T <: IO
+    ios = IOString{T}(io, IOBuffer())
     Base.ensureroom(ios.buf, 1)
     ios.buf.data[1] = ASCII_ETB = 0x17
     @assert incomplete(ios)
@@ -30,12 +59,14 @@ Base.pointer(s::IOString, i) = pointer(s.buf.data, i)
 
 incomplete(s::IOString) = codeunit(s, ncodeunits(s) + 1) == ASCII_ETB
 
+recoverable(e) = false
+
 @inline function pump(f::Function, s::IOString)
     while true
         try
             return f()
         catch e
-            if e isa s.etype && e.c == ASCII_ETB
+            if recoverable(e)
                 pump(s)
             else
                 rethrow(e)

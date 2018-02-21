@@ -100,9 +100,11 @@ end
 value(bytes, path=nothing; kw...) = value(Base.String(bytes), path; kw...)
 
 function value(io::IO, path=nothing; kw...)
-    s = IOString(io, JSON.ParseError)
+    s = IOString(io)
     return pump(() -> value(s, path; kw...), s)
 end
+
+IOStrings.recoverable(e::JSON.ParseError) = e.c == IOStrings.ASCII_ETB
 
 Base.string(j::Union{JSON.String{T},
                      JSON.Number{T},
