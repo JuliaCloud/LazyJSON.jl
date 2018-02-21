@@ -14,7 +14,8 @@ function Base.getindex(o::JSON.Object, key)
     return v
 end
 
-function Base.get(o::JSON.Object, key, default)
+Base.get(o::JSON.Object, key, default) = _get(o, key, default)
+function _get(o::JSON.Object, key, default)
     i, c = get_ic(o, key, (0, 0x00))
     if i == 0
         return default
@@ -32,12 +33,15 @@ Base.length(a::JSON.Object) = div(collection_length(a), 2)
 
 Base.start(j::JSON.Object) = (j.i, Ref(0), 0x00)
 
-function Base.done(j::JSON.Object, (i, n, c))
+Base.done(j::JSON.Object, i) = _done(j, i)
+function _done(j::JSON.Object, (i, n, c))
     i, c = nextindex(j, i, n, c)
+    n[] = i
     return c == '}'
 end
 
-function Base.next(j::JSON.Object, (i, n, c))
+Base.next(j::JSON.Object, i) = _next(j, i)
+function _next(j::JSON.Object, (i, n, c))
     i, c = nextindex(j, i, n, c)
     k = getvalue(j.s, i, c)
     i, c = nextindex(j, i, n, c)
@@ -102,3 +106,18 @@ function get_field(o::JSON.Object, field, start_i)
     end
     return i, v
 end
+
+
+# IOString Wrappers
+
+Base.length(j::JSON.Object{IOString{T}}) where T =
+    pump(() -> div(collection_length(j), 2), j.s)
+
+Base.get(j::JSON.Object{IOString{T}}, key, default) where T =
+    pump(() -> _get(j, key, default), j.s)
+
+Base.done(j::JSON.Object{IOString{T}}, i) where T =
+    pump(() -> _done(j, i), j.s)
+
+Base.next(j::JSON.Object{IOString{T}}, i) where T =
+    pump(() -> _next(j, i), j.s)

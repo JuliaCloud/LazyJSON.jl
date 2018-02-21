@@ -9,6 +9,9 @@ const enable_getproperty = true
 include("PropertyDicts.jl")
 using .PropertyDicts: PropertyDict
 
+include("IOStrings.jl")
+using .IOStrings: IOString, pump
+
 
 @static if enable_getproperty
     wrap_object(o) = PropertyDict(o)
@@ -76,7 +79,7 @@ Base.string(s::JSON.Value) = SubString(s.s, s.i, lastindex_of_value(s.s, s.i))
 
 Create a `JSON.Value` object from a JSON text.
 """
-function value(s::Union{Base.String,SubString{String}}, path=nothing; lazy=true)
+function value(s::Union{IOString,Base.String,SubString{String}}, path=nothing; lazy=true)
     i, c = skip_whitespace(s)
     if path != nothing
         v = getpath(s, path, i, c)
@@ -89,21 +92,23 @@ end
 struct ParseError <: Exception
     bytes::Base.String
     index::Int
+    c::UInt8
     message::Base.String
 end
 
 
 value(bytes, path=nothing; kw...) = value(Base.String(bytes), path; kw...)
 
-
-function value(io::IO, path=nothing; lazy=true)
-    FIXME
-    """
-    Options:
-        - AbstractString wrapper that reads more from the IO as needed?
-        - Exception handlers in the API functions that update String from IO?
-    """
+function value(io::IO, path=nothing; kw...)
+    s = IOString(io, JSON.ParseError)
+    return pump(() -> value(s, path; kw...), s)
 end
+
+Base.string(j::Union{JSON.String{T},
+                     JSON.Number{T},
+                     JSON.Object{T},
+                     JSON.Array{T}}) where T <: IOString =
+    pump(() -> SubString(j.s, j.i, lastindex_of_value(j.s, j.i)), j.s)
 
 
 """
@@ -121,7 +126,7 @@ function getvalue(s, i, c=getc(s, i))
     elseif c == 'n'                     nothing
     elseif c == 't'                     true
     else
-        throw(ParseError(s, i, "invalid value index"))
+        throw(JSON.ParseError(s, i, c, "invalid value index"))
     end
 end
 
@@ -161,7 +166,7 @@ function getflat(s, i, c = getc(s, i))
     elseif c == 'n'                     nothing, i + 3
     elseif c == 't'                     true, i + 3
     else
-        throw(ParseError(s, i, "invalid value index"))
+        throw(JSON.ParseError(s, i, c, "invalid value index"))
     end
 end
 
@@ -223,6 +228,9 @@ function nextindex(j, i, c)
         i = lastindex_of_value(j.s, i, c)
     end
     i, c = skip_noise(j.s, i + 1)
+    if c == IOStrings.ASCII_ETB
+        throw(JSON.ParseError(j.s, i, c, "input incomplete"))
+    end
     return i, c
 end
 
@@ -358,7 +366,7 @@ function lastindex_of_token(s, i, c)::Int
     elseif c == 'n'                     i + 3
     elseif c == 't'                     i + 3
     else
-        throw(ParseError(s, i, "invalid input"))
+        throw(JSON.ParseError(s, i, c, "invalid input"))
     end
 end
 
@@ -422,10 +430,13 @@ function scan_string(s, i)
     i, c = next_ic(s, i)
 
     has_escape = false
-    while !isnull(c) && c != '"'
+    while c != '"'
+        if isnull(c) || c == IOStrings.ASCII_ETB
+            throw(JSON.ParseError(s, i, c, "input incomplete"))
+        end
         escape = c == '\\'
         i, c = next_ic(s, i)
-        if escape && !isnull(c)
+        if escape && !(isnull(c) || c == IOStrings.ASCII_ETB)
             has_escape = true
             i, c = next_ic(s, i)
         end
@@ -444,6 +455,9 @@ function lastindex_of_number(s, i)::Int
     i, c = next_ic(s, i)
 
     while !isnull(c) && !isnoise(c) && !isend(c)
+        if c == IOStrings.ASCII_ETB
+            throw(JSON.ParseError(s, i, c, "input incomplete"))
+        end
         last = i
         i, c = next_ic(s, i)
     end
@@ -537,7 +551,7 @@ isnoise(c) = c == ',' ||
 `jl_alloc_string` allocates `n + 1` bytes and sets the last byte to `0x00`
 https://github.com/JuliaLang/julia/blob/master/src/array.c#L464
 """
-isnull(c)  = c == 0x00
+isnull(c) = c == 0x00
 
 
 """
@@ -576,10 +590,11 @@ function Base.show(io::IO, e::JSON.ParseError)
     r = r != nothing ? r - 1 : length(s)
     l = min(length(s), l)
     line_number = length(split(SubString(s, 1, l), '\n'))
-    col_number = e.index - l + 1
+    col_number = min(length(s), e.index) - l + 1
+    c = escape_string(string(Char(e.c)))
     print(io, "JSON.ParseError: ", e.message,
-              " at line ", line_number, ", col ", col_number, "\n",
-              SubString(s, l, r), "\n",
+              " at line ", line_number, ", col ", col_number, ": '", c, "'\n",
+              SubString(s, max(1, l), r), "\n",
               lpad("", col_number - 1, " "), "^")
 end
 

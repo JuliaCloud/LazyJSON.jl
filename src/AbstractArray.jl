@@ -19,13 +19,16 @@ Base.size(a::JSON.Array) = (length(a), )
 # Iterate
 
 Base.start(j::JSON.Array) = (j.i, Ref(0), 0x00)
+Base.done(j::JSON.Array, i) = _done(j, i)
+Base.next(j::JSON.Array, i) = _next(j, i)
 
-function Base.done(j::JSON.Array, (i, n, c))
+function _done(j::JSON.Array, (i, n, c))
     i, c = nextindex(j, i, n, c)
+    n[] = i
     return c == ']'
 end
 
-function Base.next(j::JSON.Array, (i, n, c))
+function _next(j::JSON.Array, (i, n, c))
     i, c = nextindex(j, i, n, c)
     return getvalue(j.s, i, c), (i, n, c)
 end
@@ -40,3 +43,18 @@ function nextindex(j, i, n, c)
     end
     return i, c
 end
+
+
+# IOString Wrappers
+
+Base.length(j::JSON.Array{IOString{T}}) where T =
+    pump(() -> collection_length(j), j.s)
+
+Base.getindex(j::JSON.Array{IOString{T}}, i::Integer) where T =
+    pump(() -> getvalue(x, getindex_ic(j, i)...), j.s)
+
+Base.done(j::JSON.Array{IOString{T}}, i) where T =
+    pump(() -> _done(j, i), j.s)
+
+Base.next(j::JSON.Array{IOString{T}}, i) where T =
+    pump(() -> _next(j, i), j.s)

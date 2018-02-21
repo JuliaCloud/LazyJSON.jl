@@ -16,9 +16,6 @@ function parse_string(s, i)
 end
 
 
-#Base.convert(::Type{AbstractString}, s::JSON.String) =
-#    convert(Base.SubString, s)
-
 Base.convert(::Type{Base.String}, s::JSON.String) =
     convert(Base.String, convert(Base.SubString, s))
 
@@ -268,3 +265,49 @@ function setc_utf8(s, i, c)
         end
     end
 end
+
+
+
+# IOString Wrappers
+
+#FIXME
+#https://github.com/JuliaLang/julia/commit/1f0c6fa35ab64ad66a5bb413fad474e2c722c290#r27686527
+Base.@propagate_inbounds function Base.next(s::IOString, i::Int)
+    b = codeunit(s, i)
+    u = UInt32(b) << 24
+    Base.between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
+    return next_continued(s, i, u)
+end
+
+function Base.next_continued(s::IOString, i::Int, u::UInt32)
+    u < 0xc0000000 && (i += 1; @goto ret)
+    n = ncodeunits(s)
+    # first continuation byte
+    (i += 1) > n && @goto ret
+    @inbounds b = codeunit(s, i)
+    b & 0xc0 == 0x80 || @goto ret
+    u |= UInt32(b) << 16
+    # second continuation byte
+    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
+    @inbounds b = codeunit(s, i)
+    b & 0xc0 == 0x80 || @goto ret
+    u |= UInt32(b) << 8
+    # third continuation byte
+    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
+    @inbounds b = codeunit(s, i)
+    b & 0xc0 == 0x80 || @goto ret
+    u |= UInt32(b); i += 1
+@label ret
+    return reinterpret(Char, u), i
+end
+
+#FIXME
+#https://github.com/JuliaLang/julia/commit/8de25f5ac6c8a8ef9a8872f2d9aaaee9ddbf6bf7#r27684956
+Base.isvalid(s::IOString, i::Integer) = Base._thisind_str(s, i) == i
+
+
+Base.convert(::Type{SubString}, j::JSON.String{IOString{T}}) where T =
+    pump(() -> parse_string(j.s, j.i)[1], j.s)
+
+Base.ncodeunits(j::JSON.String{IOString{T}}) where T =
+    pump(() -> scan_string(j.s, j.i)[1] - j.i - 1, j.s)

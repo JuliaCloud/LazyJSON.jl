@@ -2,7 +2,7 @@
 
 """
 `convert(Base.Number, JSON.Number)` parses the number string and returns
-`Int64` or `Float64`.
+`Int64`, `Int128`, `Float64`, `BigInt` or `BigFloat`.
 
 Methods are also defined for basic arithmetic operators: +, -, *, /, and ^.
 Promotion rules are defined to promote JSON.Number to `Int64` and `Float64`.
@@ -121,23 +121,26 @@ function parse_number(s, i)
         end
     end
 
+    if c == IOStrings.ASCII_ETB
+        throw(JSON.ParseError(s, i, c, "unexpected end of number"))
+    end
+
     return v, i - 1
 end
 
 decimal(c) = c - UInt8('0')
 
-function Base.convert(::Type{T}, n::JSON.Number) where T <: Union{Int64, Float64}
-    s = string(n)
-    v = tryparse(T, s)
-    if v == nothing
-        throw(InexactError(:convert, T, s))
-    end
-    return v
-end
 
 Base.Number(n::JSON.Number) = convert(Base.Number, n)
-Base.Int64(n::JSON.Number) = convert(Base.Int64, n)
-Base.Float64(n::JSON.Number) = convert(Base.Float64, n)
+
+Base.Int8(n::JSON.Number)::Int8 = Base.Number(n)
+Base.Int16(n::JSON.Number)::Int16 = Base.Number(n)
+Base.Int32(n::JSON.Number)::Int32 = Base.Number(n)
+Base.Int64(n::JSON.Number)::Int64 = Base.Number(n)
+Base.Int128(n::JSON.Number)::Int128 = Base.Number(n)
+Base.BigInt(n::JSON.Number)::BigInt = Base.Number(n)
+Base.Float64(n::JSON.Number)::Float64 = Base.Number(n)
+Base.BigFloat(n::JSON.Number)::BigFloat = Base.Number(n)
 
 
 import Base: +, -, *, /, ^
@@ -157,3 +160,10 @@ Base.promote_rule(
     ::Type{T}, ::Type{JSON.Number{S}}) where {S, T <: AbstractFloat} = Float64
 
 Base.show(io::IO, n::JSON.Number) = print(io, string(n))
+
+
+
+# IOString Wrappers
+
+Base.convert(::Type{Base.Number}, j::JSON.Number{IOString{T}}) where T =
+    pump(() -> parse_number(j.s, j.i)[1], j.s)
