@@ -781,6 +781,9 @@ j = value(j)
     }
 }"""
 
+@test splice(j, j.owner.login, "foo") ==
+      splice(j, ["owner", "login"], "foo")
+
 @test splice(j.owner, j.owner.login, "foo") == Dict("login" => "foo")
 
 @test string(splice(j, j.parent, j.owner)) ==
