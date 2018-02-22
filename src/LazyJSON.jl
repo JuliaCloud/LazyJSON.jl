@@ -1,5 +1,9 @@
 module LazyJSON
 
+module JSONjl
+    using JSON
+end
+
 using DataStructures: OrderedDict
 
 const JSON = LazyJSON
@@ -70,6 +74,33 @@ Verbatim JSON text of a `JSON.Value`
 Base.string(s::JSON.Value) = SubString(s.s, s.i, lastindex_of_value(s.s, s.i))
 
 
+"""
+JSON text representation of `x`
+"""
+jsonstring(d::PropertyDict) = jsonstring(PropertyDicts.unwrap(d))
+jsonstring(x::JSON.Value) = string(x)
+jsonstring(x) = JSONjl.JSON.json(x)
+
+
+"""
+Replace value `v` with `x`.
+"""
+splice(j::JSON.Value, v::JSON.Value, x) = value(splice(j.s, v.i, x, j.i))
+
+splice(j::JSON.Value, path::Vector, x) =
+    value(splice(j.s, getpath(j.s, path, j.i)[1], x, j.i))
+
+splice(s::AbstractString, path::Vector, x) = splice(s, getpath(s, path)[1], x)
+
+splice(s::AbstractString, i::Int, x, start_i = 1) = 
+    string(SubString(s, start_i, i - 1),
+           jsonstring(x),
+           SubString(s, lastindex_of_value(s, i) + 1))
+
+splice(d::PropertyDict, v::PropertyDict, x) = splice(PropertyDicts.unwrap(d),
+                                                     PropertyDicts.unwrap(v), x)
+splice(d::PropertyDict, v, x) = splice(PropertyDicts.unwrap(d), v, x)
+
 
 # Get Typed JSON Value
 
@@ -82,10 +113,9 @@ Create a `JSON.Value` object from a JSON text.
 function value(s::Union{IOString,Base.String,SubString{String}}, path=nothing; lazy=true)
     i, c = skip_whitespace(s)
     if path != nothing
-        v = getpath(s, path, i, c)
-    else
-        v = getvalue(s, i, c)
+        i, c = getpath(s, path, i, c)
     end
+    v = getvalue(s, i, c)
     return lazy ? v : flatten(v)
 end
 
@@ -278,8 +308,8 @@ Get the index `i` and first byte `c` of the field value for `key` in an Object.
 """
 function get_ic(o::JSON.Object, key::AbstractString, default, start::Int=o.i)
 
-    key1 = getc(key, 1)                           # Extract 1st byte of key.
-    keyp = pointer(key, 2)                        # Cache pointer to remainder
+    key1 = getc(key, 1)                           # Extract 1st byte of key,
+    keyp = pointer(key, 2)                        # pointer to remainder
     keyl = sizeof(key)                            # of key and length of key.
 
     s = o.s                                       # Skip from "begin" byte '{'
@@ -326,7 +356,9 @@ Find the value at a specified key `path` in a JSON text.
  - `i`, start index
  - `c`, byte at index `i`
 """
-function getpath(s, path, i::Int, c::UInt8=getc(s, i))
+function getpath(s, path, i::Int=1, c::UInt8=getc(s, i))
+
+    i, c = skip_whitespace(s, i, c)
 
     for key in path
         if c == '[' && key isa Integer
@@ -340,10 +372,8 @@ function getpath(s, path, i::Int, c::UInt8=getc(s, i))
             throw(KeyError(key))
         end
     end
-    return getvalue(s, i, c)
+    return i, c
 end
-
-getpath(j::JSON.Collection, path) = getpath(j.s, path, j.i)
 
 
 
@@ -471,8 +501,7 @@ end
 """
 Skip over whitespace in String `s` starting at index `i`.
 """
-function skip_whitespace(s, i = 1)
-    c = getc(s, i)
+function skip_whitespace(s, i = 1, c = getc(s, i))
     while iswhitespace(c)
         i, c = next_ic(s, i)
     end

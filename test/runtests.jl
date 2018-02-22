@@ -722,5 +722,93 @@ end #testset
 
 
 #-------------------------------------------------------------------------------
+@testset "splice" begin
+#-------------------------------------------------------------------------------
+
+splice = LazyJSON.splice
+value = LazyJSON.value
+
+@test splice("1", [], 7) == "7"
+@test splice("\"foo\"", [], "bar") == "\"bar\""
+@test splice("[1,2,3]", [3], 4) == "[1,2,4]"
+@test splice(" {\"foo\": \"bar\"}", ["foo"], 7) == " {\"foo\": 7}"
+
+@test splice(value("1"), [], 7) == 7
+@test splice(value("\"foo\""), [], "bar") == "bar"
+@test splice(value("[1,2,3]"), [3], 4) == [1,2,4]
+@test splice(value(" {\"foo\": \"bar\"}"), ["foo"], 7) == Dict("foo" => 7)
+
+j = """{
+    "id": 1296269,
+    "owner": {
+        "login": "octocat"
+    },
+    "parent": {
+        "name": "test-parent"
+    }
+}"""
+
+@test splice(j, ["owner", "login"], "foo") ==
+"""{
+    "id": 1296269,
+    "owner": {
+        "login": "foo"
+    },
+    "parent": {
+        "name": "test-parent"
+    }
+}"""
+
+@test splice(j, ["owner"], "foo") ==
+"""{
+    "id": 1296269,
+    "owner": "foo",
+    "parent": {
+        "name": "test-parent"
+    }
+}"""
+
+j = value(j)
+
+@test string(splice(j, ["owner", "login"], "foo")) ==
+"""{
+    "id": 1296269,
+    "owner": {
+        "login": "foo"
+    },
+    "parent": {
+        "name": "test-parent"
+    }
+}"""
+
+@test splice(j.owner, j.owner.login, "foo") == Dict("login" => "foo")
+
+@test string(splice(j, j.parent, j.owner)) ==
+"""{
+    "id": 1296269,
+    "owner": {
+        "login": "octocat"
+    },
+    "parent": {
+        "login": "octocat"
+    }
+}"""
+
+@test string(splice(j, j.id, [1,2,3,4,5])) ==
+"""{
+    "id": [1,2,3,4,5],
+    "owner": {
+        "login": "octocat"
+    },
+    "parent": {
+        "name": "test-parent"
+    }
+}"""
+
+end #testset
+
+
+
+#-------------------------------------------------------------------------------
 end # top level testset JSON
 #-------------------------------------------------------------------------------

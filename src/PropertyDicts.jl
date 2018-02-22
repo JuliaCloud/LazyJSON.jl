@@ -53,6 +53,7 @@ Base.start(d::PropertyDict) = start(unwrap(d))
 Base.done(d::PropertyDict, i) = done(unwrap(d), i)
 Base.next(d::PropertyDict, i) = next(unwrap(d), i)
 
+Base.string(d::PropertyDict) = string(unwrap(d))
 
 Base.convert(::Type{Any}, d::PropertyDict) = d
 Base.convert(::Type{PropertyDict{K,V,T}}, d::PropertyDict{K,V,T}) where {K,V,T<:AbstractDict{K,V}} = d
