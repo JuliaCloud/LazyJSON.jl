@@ -87,6 +87,31 @@ end
 
 
 println("\n")
+n > 1 && println("Update a value:")
+
+n > 1 && print("LazyJSON.jl:")
+GC.gc()
+@time for i in 1:n
+    r = LazyJSON.value(j)
+    s = string(LazyJSON.splice(r, r.shapes.scope.enum[1], "foo"))
+    r = LazyJSON.value(s)
+    @assert r.shapes.scope.enum[1] == "foo"
+end
+
+
+n > 1 && print("JSON.jl:    ")
+GC.gc()
+@time for i in 1:n
+    r = JSON.parse(j)
+    r["shapes"]["scope"]["enum"][1] = "foo"
+    s = JSON.json(r)
+    r = JSON.parse(s)
+    @assert r["shapes"]["scope"]["enum"][1] == "foo"
+end
+
+
+
+println("\n")
 n > 1 && println("Recursive promotion of all values to Julia objects.:")
 
 n > 1 && print("LazyJSON.jl:")
