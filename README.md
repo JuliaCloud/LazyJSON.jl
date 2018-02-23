@@ -5,6 +5,8 @@
 
 LazyJSON is an interface for reading JSON data in Julia programs.
 
+If you find it useful, or not, please report your experiance in the [discourse thread](https://discourse.julialang.org/t/announce-a-different-way-to-read-json-data-lazyjson-jl/9046).
+
 It provides direct access to values stored in a JSON text though standard Julia
 interfaces: `Number`, `AbstractString`, `AbstractVector` and `AbstractDict`.
 
