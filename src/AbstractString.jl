@@ -98,18 +98,20 @@ Return a new String.
 """
 function unescape_string!(s, i, l)
 
-    out = Base.String(Vector{UInt8}(uninitialized, l - i))
+    out = Base.StringVector(l - i)
     j = 1
 
     local c = getc(s, i)
 
     while i <= l
         if c != '\\' || i + 1 > l
-            j = setc(out, j, c)
+            @inbounds out[j] = c
+            j += 1
         else
             last_i, cp = json_unescape_char(s, i, c, l)
             if i == last_i
-                j = setc(out, j, cp)
+                @inbounds out[j] = cp
+                j += 1
             else
                 i = last_i
                 j = setc_utf8(out, j, cp)
@@ -118,7 +120,8 @@ function unescape_string!(s, i, l)
         i, c = next_ic(s, i)
     end
 
-    return SubString(out, 1, prevind(out, j))
+    s = Base.String(out)
+    return SubString(s, 1, prevind(s, j))
 end
 
 
@@ -254,10 +257,10 @@ ishexdigit(c::UInt8) =
 """
 Write a Unicode chatacter `c` into a String `s` as UTF8 at byte index `i`.
 """
-function setc_utf8(s, i, c)
+function setc_utf8(s::Vector{UInt8}, i, c)
     bytes = bswap(reinterpret(UInt32, Char(c)))
     while true
-        setc(s, i, bytes % UInt8)
+        @inbounds s[i] = bytes % UInt8
         i += 1
         bytes >>= 8
         if bytes == 0

@@ -588,19 +588,13 @@ isnull(c) = c == 0x00
 """
 Get byte `i` in string `s` without bounds checking.
 """
-getc(s, i) = unsafe_load(pointer(s), i)
+getc(s, i) = @inbounds codeunit(s, i)
 
 
 """
 Increment `i` and get byte `i` in string `s` without bounds checking.
 """
 next_ic(s, i) = (i + 1, getc(s, i + 1))
-
-
-"""
-Store byte `c` at index `i` in string `s` without bounds checking.
-"""
-setc(s, i, c) = (unsafe_store!(pointer(s), c, i); i + 1)
 
 
 # Allow comparison of UInt8 with Char (e.g. c == '{')
