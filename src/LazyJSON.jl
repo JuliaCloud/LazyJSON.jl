@@ -111,6 +111,10 @@ splice(d::PropertyDict, v, x) = splice(PropertyDicts.unwrap(d), v, x)
 Create a `JSON.Value` object from a JSON text.
 """
 function value(s::Union{IOString,Base.String,SubString{String}}, path=nothing; lazy=true)
+
+    # Check that the string has a C-style termination characer.
+    @assert (c = getc(s, sizeof(s) + 1); c == 0x00 || c == IOStrings.ASCII_ETB)
+
     i, c = skip_whitespace(s)
     if path != nothing
         i, c = getpath(s, path, i, c)
@@ -588,7 +592,10 @@ isnull(c) = c == 0x00
 """
 Get byte `i` in string `s` without bounds checking.
 """
-getc(s, i) = @inbounds codeunit(s, i)
+getc(s, i) = unsafe_load(pointer(s), i)
+#getc(s, i) = @inbounds codeunit(s, i)
+# FIXME this causes Pkg.test("LazyJSON") to fail becuase the --check-bounds
+#       option is passed to the test process.
 
 
 """

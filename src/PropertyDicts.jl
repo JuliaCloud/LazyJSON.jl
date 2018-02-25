@@ -57,7 +57,9 @@ Base.string(d::PropertyDict) = string(unwrap(d))
 
 Base.convert(::Type{Any}, d::PropertyDict) = d
 Base.convert(::Type{PropertyDict{K,V,T}}, d::PropertyDict{K,V,T}) where {K,V,T<:AbstractDict{K,V}} = d
-Base.convert(T::Type, d::PropertyDict) = convert(T, PropertyDicts.unwrap(d))
+Base.convert(::Type{T}, d::PropertyDict) where T <: AbstractDict =
+    T === AbstractDict ? d : convert(T, PropertyDicts.unwrap(d))
+Base.convert(::Type{T}, d::PropertyDict) where T = convert(T, PropertyDicts.unwrap(d))
 
 
 
