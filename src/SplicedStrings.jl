@@ -25,6 +25,10 @@ splice_item(i) = [SubString(string(i))]
 Base.promote_rule(::Type{<:AbstractString},
                   ::Type{<:AbstractString}) = AbstractString
 
+#https://github.com/JuliaLang/julia/issues/26202
+Base.nextind(s::SubString{SplicedString}, i::Int) = nextind(s.string, i)
+Base.prevind(s::SubString{SplicedString}, i::Int) = prevind(s.string, i)
+
 function convert(::Type{String}, ss::SplicedString)
     buf = IOBuffer()
     for i in ss.v
@@ -351,8 +355,11 @@ i = 1 << 40 | 5 ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i)
 ss = SS("one", "two", "three")
 @test 'o' in ss
 @test 'n' in ss
-#@test 'e' in ss
-#@test 't' in ss
-#i = findfirst(equalto('w'), ss)
-#@show i
-#@test ss[i] == 'w'
+@test 'e' in ss
+@test 't' in ss
+@test 'w' in ss
+@test 'o' in ss
+@test 'h' in ss
+@test 'r' in ss
+i = findfirst(equalto('w'), ss)
+@test ss[i] == 'w'
