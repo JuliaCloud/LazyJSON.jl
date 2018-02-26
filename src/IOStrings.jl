@@ -1,5 +1,8 @@
 module IOStrings
 
+using Base: @propagate_inbounds
+
+
 """
 `IOString` is an abstract string that accumulates bytes from an IO stream.
 
@@ -53,7 +56,7 @@ Base.String(s::IOString) = convert(Base.String, s)
 Base.IteratorSize(::Type{IOString}) = Base.SizeUnknown()
 Base.ncodeunits(s::IOString) = s.buf.size
 Base.codeunit(s::IOString) = UInt8
-Base.codeunit(s::IOString, i::Integer) = s.buf.data[i]
+@propagate_inbounds Base.codeunit(s::IOString, i::Integer) = s.buf.data[i]
 Base.pointer(s::IOString) = pointer(s.buf.data)
 Base.pointer(s::IOString, i) = pointer(s.buf.data, i)
 

@@ -5,16 +5,15 @@ module JSONjl
 end
 
 using DataStructures: OrderedDict
+using Base: @propagate_inbounds
 
 const JSON = LazyJSON
 
 const enable_getproperty = true
 
-include("PropertyDicts.jl")
-using .PropertyDicts: PropertyDict
-
-include("IOStrings.jl")
-using .IOStrings: IOString, pump
+include("SplicedStrings.jl")            ; using .SplicedStrings: SplicedString
+include("PropertyDicts.jl")             ; using .PropertyDicts: PropertyDict
+include("IOStrings.jl")                 ; using .IOStrings: IOString, pump
 
 
 @static if enable_getproperty
@@ -93,9 +92,9 @@ splice(j::JSON.Value, path::Vector, x) =
 splice(s::AbstractString, path::Vector, x) = splice(s, getpath(s, path)[1], x)
 
 splice(s::AbstractString, i::Int, x, start_i = 1) = 
-    string(SubString(s, start_i, i - 1),
-           jsonstring(x),
-           SubString(s, lastindex_of_value(s, i) + 1))
+    SplicedString(SubString(s, start_i, i - 1),
+                  jsonstring(x),
+                  SubString(s, lastindex_of_value(s, i) + 1))
 
 splice(d::PropertyDict, v::PropertyDict, x) = splice(PropertyDicts.unwrap(d),
                                                      PropertyDicts.unwrap(v), x)

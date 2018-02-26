@@ -86,6 +86,7 @@ end
 =#
 
 
+#=
 println("\n")
 n > 1 && println("Update a value:")
 
@@ -108,6 +109,7 @@ GC.gc()
     r = JSON.parse(s)
     @assert r["shapes"]["scope"]["enum"][1] == "foo"
 end
+=#
 
 
 

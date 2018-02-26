@@ -9,6 +9,9 @@ end
 
 const JSON = LazyJSON
 
+include("SplicedStrings.jl")
+
+
 struct Foo
     a::Int
     b
@@ -52,8 +55,6 @@ end
 
 
 
-
-@testset "JSON" begin
 
 #include("AbstractString.jl")
 
@@ -537,6 +538,13 @@ v = convert(Repo, LazyJSON.value(gist_json))
 
 @test v.owner.login == "octocat"
 
+s = "XXX $gist_json ~YYY"
+s = SubString(s, 5, findfirst(equalto('~'), s) - 2)
+@test s == gist_json
+@test s isa SubString{String}
+
+v = convert(Repo, LazyJSON.value(s))
+@test v.owner.login == "octocat"
 
 end #testset
 
@@ -809,9 +817,3 @@ j = value(j)
 }"""
 
 end #testset
-
-
-
-#-------------------------------------------------------------------------------
-end # top level testset JSON
-#-------------------------------------------------------------------------------

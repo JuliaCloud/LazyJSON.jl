@@ -30,15 +30,20 @@ Base.IteratorSize(::Type{JSON.String{T}}) where T = Base.SizeUnknown()
 
 Base.ncodeunits(s::JSON.String) = scan_string(s.s, s.i)[1] - s.i - 1
 
-Base.isvalid(s::JSON.String, i::Integer) = string_index_isvalid(s.s, s.i + i)
+@propagate_inbounds(
+Base.isvalid(s::JSON.String, i::Integer) = string_index_isvalid(s.s, s.i + i))
+
 
 Base.codeunit(s::JSON.String) = codeunit(s.s)
-Base.codeunit(s::JSON.String, i::Integer) = codeunit(s.s, s.i + i)
 
+@propagate_inbounds(
+Base.codeunit(s::JSON.String, i::Integer) = codeunit(s.s, s.i + i))
+
+@propagate_inbounds(
 function Base.next(s::JSON.String, i::Integer)
     i, c = json_char(s.s, s.i + i)
     return c, i - s.i + 1
-end
+end)
 
 
 # Unescaping JSON Strings
@@ -129,6 +134,7 @@ end
 Return a `Char` from a JSON string `s` at index `i`.
 Unescpe character if needed.
 """
+@propagate_inbounds(
 function json_char(s, i, c = getc(s,i), l = sizeof(s))::Tuple{Int, Char}
 
     if c != '\\' || i + 1 > l
@@ -138,7 +144,7 @@ function json_char(s, i, c = getc(s,i), l = sizeof(s))::Tuple{Int, Char}
 
     i, c = json_unescape_char(s, i, c, l)
     return i, Char(c)
-end
+end)
 
 
 """

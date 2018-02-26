@@ -57,7 +57,7 @@ Base.convert(::Type{Any}, o::JSON.Object) = o
 Base.convert(::Type{JSON.Object{T}},
                  o::JSON.Object{T}) where T <: AbstractString = o
 
-Base.convert(::Type{T}, o::JSON.Object) where T<:AbstractDict = T(o)
+Base.convert(::Type{T}, o::JSON.Object) where T <: AbstractDict = T(o)
 
 
 # Conversion to Struct Types
