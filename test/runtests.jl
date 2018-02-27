@@ -789,8 +789,15 @@ j = value(j)
     }
 }"""
 
-@test splice(j, j.owner.login, "foo") ==
-      splice(j, ["owner", "login"], "foo")
+a = splice(j, j.owner.login, "foo")
+b = splice(j, ["owner", "login"], "foo")
+
+@test a.id == b.id
+@test Int(a.id) == Float64(b.id)
+@test a.owner.login == b.owner.login
+@test a.parent == b.parent
+@test a.parent.name == b.parent.name
+@test a == b
 
 @test splice(j.owner, j.owner.login, "foo") == Dict("login" => "foo")
 

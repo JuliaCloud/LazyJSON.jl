@@ -9,9 +9,9 @@ Base.convert(::Type{SubString}, s::JSON.String) = parse_string(s.s, s.i)[1]
 function parse_string(s, i)
     last_i, has_escape = scan_string(s, i)
     if !has_escape
-        return SubString(s, i+1, prevind(s, last_i)), last_i
+        return SubString(s, next_i(s, i), prevind(s, last_i)), last_i
     else
-        return unescape_string!(s, i+1, last_i-1), last_i
+        return unescape_json_string(s, i, last_i), last_i
     end
 end
 
@@ -42,7 +42,7 @@ Base.codeunit(s::JSON.String, i::Integer) = codeunit(s.s, s.i + i))
 @propagate_inbounds(
 function Base.next(s::JSON.String, i::Integer)
     i, c = json_char(s.s, s.i + i)
-    return c, i - s.i + 1
+    return c, i - s.i
 end)
 
 
@@ -101,15 +101,15 @@ end
 Unescape bytes of a String `s` up to byte index `l`, starting at byte index `i`.
 Return a new String.
 """
-function unescape_string!(s, i, l)
+function unescape_json_string(s, i, l)
 
-    out = Base.StringVector(l - i)
-    j = 1
+    i, c = next_ic(s, i)
 
-    local c = getc(s, i)
+    out = Base.StringVector(l - i)      # Larger than needed because escape
+    j = 1                               # characters will be removed.
 
-    while i <= l
-        if c != '\\' || i + 1 > l
+    while i < l
+        if c != '\\'
             @inbounds out[j] = c
             j += 1
         else
@@ -135,15 +135,18 @@ Return a `Char` from a JSON string `s` at index `i`.
 Unescpe character if needed.
 """
 @propagate_inbounds(
-function json_char(s, i, c = getc(s,i), l = sizeof(s))::Tuple{Int, Char}
+function json_char(s, i)::Tuple{Int, Char}
 
-    if c != '\\' || i + 1 > l
+    c = getc(s, i)
+    l = ncodeunits(s)
+
+    if c != '\\' || next_i(s, i) > l
         c = s[i]
-        return nextind(s, i) - 1, s[i]
+        return nextind(s, i), s[i]
     end
 
     i, c = json_unescape_char(s, i, c, l)
-    return i, Char(c)
+    return next_i(s, i), Char(c)
 end)
 
 
@@ -156,7 +159,7 @@ function json_unescape_char(s, i, c, l)::Tuple{Int, Union{UInt8,UInt16,UInt32}}
     i, c = next_ic(s, i)
     uc = unescape_c(c)
     if uc == 0x00 ||                    # If the character after '\' was not
-       uc == 'u' && i + 4 > l           # escapable, or if there aren't enough
+       uc == 'u' && next_i(s, i, 4) > l # escapable, or if there aren't enough
         return i, UInt8('\\')           # bytes for \uXXXX, leave the \ as0is.
     end
 
@@ -165,12 +168,13 @@ function json_unescape_char(s, i, c, l)::Tuple{Int, Union{UInt8,UInt16,UInt32}}
     end
 
     i, c16 = unescape_hex4(s, i)        # \uXXXX escaped UTF16 codepoint.
-    if c16 in 0xd800:0xdbff &&          # Check for surrogate pair...
-       i + 6 <= l           &&
-       getc(s, i+1) == '\\' &&
-       getc(s, i+2) == 'u'
+    if c16 in 0xd800:0xdbff          && # Check for surrogate pair...
+       next_i(s, i, 6) <= l          &&
+       getc(s, next_i(s, i)) == '\\' &&
+       getc(s, next_i(s, i, 2)) == 'u'
 
-        j, tail = unescape_hex4(s, i+2)
+        j = next_i(s, i, 2)
+        j, tail = unescape_hex4(s, j)
         if tail in 0xdc00:0xdfff
             c32 = UInt32(c16 - 0xd7f7)  # Recombine surrogate pair to produce
             c32 <<= 10                  # 32-bit character code.
@@ -207,6 +211,8 @@ A valid `i` can point to:
  - the start of a `\\uXXXX` escaped UTF16 character;
 """
 function string_index_isvalid(s, i)
+
+# FIXME assumes dense indexes
 
     c = getc(s, i)
 
@@ -247,7 +253,7 @@ function string_index_isvalid(s, i)
             j -= 1
         end
         if c == 'u' && isescape(s, j - 1)
-           return false 
+           return false
         end
     end
 

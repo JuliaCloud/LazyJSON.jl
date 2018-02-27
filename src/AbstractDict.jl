@@ -8,7 +8,7 @@ Base.IteratorEltype(::Type{JSON.Object{T}}) where T = Base.EltypeUnknown()
 
 function Base.getindex(o::JSON.Object, key)
     v = get(o, key, :not_found)
-    if v == :not_found
+    if v === :not_found
         throw(KeyError(key))
     end
     return v

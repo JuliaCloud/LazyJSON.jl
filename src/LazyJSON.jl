@@ -91,10 +91,10 @@ splice(j::JSON.Value, path::Vector, x) =
 
 splice(s::AbstractString, path::Vector, x) = splice(s, getpath(s, path)[1], x)
 
-splice(s::AbstractString, i::Int, x, start_i = 1) = 
-    SplicedString(SubString(s, start_i, i - 1),
+splice(s::AbstractString, i::Int, x, start_i = 1) =
+    SplicedString(SubString(s, start_i, prevind(s, i)),
                   jsonstring(x),
-                  SubString(s, lastindex_of_value(s, i) + 1))
+                  SubString(s, next_i(s, lastindex_of_value(s, i))))
 
 splice(d::PropertyDict, v::PropertyDict, x) = splice(PropertyDicts.unwrap(d),
                                                      PropertyDicts.unwrap(v), x)
@@ -103,18 +103,22 @@ splice(d::PropertyDict, v, x) = splice(PropertyDicts.unwrap(d), v, x)
 
 # Get Typed JSON Value
 
+const SupportedString = Union{IOString,
+                              SplicedString,
+                              Base.String}
+
 """
     value(jsontext) -> JSON.Value
     JSON.Value <: Union{Number, AbstractString, AbstractVector, AbstractDict}
 
 Create a `JSON.Value` object from a JSON text.
 """
-function value(s::Union{IOString,Base.String,SubString{String}}, path=nothing; lazy=true)
+function value(s::SupportedString, path=nothing, i = 1; lazy=true)
 
     # Check that the string has a C-style termination characer.
-    @assert (c = getc(s, sizeof(s) + 1); c == 0x00 || c == IOStrings.ASCII_ETB)
+    @assert (c = getc(s, ncodeunits(s) + 1); c == 0x00 || c == IOStrings.ASCII_ETB)
 
-    i, c = skip_whitespace(s)
+    i, c = skip_whitespace(s, i)
     if path != nothing
         i, c = getpath(s, path, i, c)
     end
@@ -129,6 +133,8 @@ struct ParseError <: Exception
     message::Base.String
 end
 
+value(ss::SubString{<:SupportedString}, path=nothing; kw...) =
+    value(ss.string, path, 1 + ss.offset; kw...)
 
 value(bytes, path=nothing; kw...) = value(Base.String(bytes), path; kw...)
 
@@ -197,9 +203,9 @@ function getflat(s, i, c = getc(s, i))
     elseif c == '['                     flat_array(s, i)
     elseif c == '"'                     parse_string(s, i)
     elseif isnum(c)                     parse_number(s, i)
-    elseif c == 'f'                     false, i + 4
-    elseif c == 'n'                     nothing, i + 3
-    elseif c == 't'                     true, i + 3
+    elseif c == 'f'                     false, next_i(s, i, 4)
+    elseif c == 'n'                     nothing, next_i(s, i, 3)
+    elseif c == 't'                     true, next_i(s, i, 3)
     else
         throw(JSON.ParseError(s, i, c, "invalid value index"))
     end
@@ -212,24 +218,24 @@ flatten(v::Value) = getflat(v.s, v.i)[1]
 
 function flat_object(s, i)
     o = OrderedDict{SubString{Base.String},Any}()
-    i, c = skip_noise(s, i + 1)
+    i, c = skip_noise(s, i)
     while c != '}'
         k, i = parse_string(s, i)
-        i, c = skip_noise(s, i + 1)
+        i, c = skip_noise(s, i)
         v, i = getflat(s, i, c)
         o[k] = v
-        i, c = skip_noise(s, i + 1)
+        i, c = skip_noise(s, i)
     end
     return o, i
 end
 
 function flat_array(s, i)
     a = Any[]
-    i, c = skip_noise(s, i + 1)
+    i, c = skip_noise(s, i)
     while c != ']'
         v, i = getflat(s, i, c)
         push!(a, v)
-        i, c = skip_noise(s, i + 1)
+        i, c = skip_noise(s, i)
     end
     return a, i
 end
@@ -262,7 +268,7 @@ function nextindex(j, i, c)
     if i > j.i
         i = lastindex_of_value(j.s, i, c)
     end
-    i, c = skip_noise(j.s, i + 1)
+    i, c = skip_noise(j.s, i)
     if c == IOStrings.ASCII_ETB
         throw(JSON.ParseError(j.s, i, c, "input incomplete"))
     end
@@ -311,33 +317,34 @@ Get the index `i` and first byte `c` of the field value for `key` in an Object.
 """
 function get_ic(o::JSON.Object, key::AbstractString, default, start::Int=o.i)
 
-    key1 = getc(key, 1)                           # Extract 1st byte of key,
-    keyp = pointer(key, 2)                        # pointer to remainder
-    keyl = sizeof(key)                            # of key and length of key.
+    keyl = sizeof(key)                            # Extract length of key and
+    key1 = keyl == 0 ? 0x00 : key1 = getc(key, 1) # first byte of key.
 
     s = o.s                                       # Skip from "begin" byte '{'
-    i, c = skip_noise(s, start + 1)               # to first field name byte.
+    i, c = skip_noise(s, start)                   # to first field name byte.
 
     while c != '}'
         last_i, has_escape = scan_string(s, i)    # Find end of field name and
         if keyl == 0                              # compare to `key.
-            foundkey = last_i == i + 1
-        elseif has_escape
-            foundkey = key == JSON.String(s, i)           # {"key": ...}
-        else                                              #  ^   ^
-            foundkey = last_i == i + 1 + keyl &&          #  i   last_i
-                       key1 == getc(s, i + 1) &&
-                       (keyl == 1 || memcmp(pointer(s, i+2), keyp, keyl-1) == 0)
+            foundkey = last_i == next_i(s, i)
+        elseif has_escape || !applicable(pointer, o.s)
+            foundkey = key == JSON.String(s, i)
+        elseif key1 != next_c(s, i) ||            # {"key": ...}
+               last_i != next_i(s, i, 1 + keyl)   #  ^   ^
+            foundkey = false                      #  i   last_i
+        else
+            foundkey = memcmp(pointer(s, i+1),
+                              pointer(key), keyl) == 0
         end
 
-        i, c = skip_noise(s, last_i + 1)          # Skip ':' and whitespace.
+        i, c = skip_noise(s, last_i)              # Skip ':' and whitespace.
 
         if foundkey                               # If the key matched, return
             return i, c                           # index of first value byte.
         end
 
         i = lastindex_of_value(s, i, c)           # Skip over the value and the
-        i, c = skip_noise(s, i + 1)               # ',' and whitespace.
+        i, c = skip_noise(s, i)                   # ',' and whitespace.
     end
 
     if start != o.i
@@ -397,9 +404,9 @@ function lastindex_of_token(s, i, c)::Int
            c == 0x00                    i
     elseif c == '"'                     lastindex_of_string(s, i)
     elseif isnum(c)                     lastindex_of_number(s, i)
-    elseif c == 'f'                     i + 4
-    elseif c == 'n'                     i + 3
-    elseif c == 't'                     i + 3
+    elseif c == 'f'                     next_i(s, i, 4)
+    elseif c == 'n'                     next_i(s, i, 3)
+    elseif c == 't'                     next_i(s, i, 3)
     else
         throw(JSON.ParseError(s, i, c, "invalid input"))
     end
@@ -429,7 +436,7 @@ function lastindex_of_collection(s, i, c)::Int
     nest = 1
 
     while nest > 0
-        i, c = skip_noise(s, i + 1)
+        i, c = skip_noise(s, i)
         if isbegin(c)
             nest += 1
         elseif isend(c)
@@ -504,7 +511,7 @@ end
 """
 Skip over whitespace in String `s` starting at index `i`.
 """
-function skip_whitespace(s, i = 1, c = getc(s, i))
+function skip_whitespace(s, i, c = getc(s, i))
     while iswhitespace(c)
         i, c = next_ic(s, i)
     end
@@ -513,10 +520,10 @@ end
 
 
 """
-Skip over non-value characters in String `s` starting at index `i`.
+Skip over non-value characters in String `s` starting at index `i` + 1.
 """
 function skip_noise(s, i)
-    c = getc(s, i)
+    i, c = next_ic(s, i)
     while isnoise(c)
         i, c = next_ic(s, i)
     end
@@ -591,7 +598,14 @@ isnull(c) = c == 0x00
 """
 Get byte `i` in string `s` without bounds checking.
 """
-getc(s, i) = unsafe_load(pointer(s), i)
+@generated function getc(s, i)
+    if hasmethod(pointer, (s,))
+        :(unsafe_load(pointer(s), i))
+    else
+        :(i > ncodeunits(s) ? 0x00 : @inbounds codeunit(s, i))
+    end
+end
+
 #getc(s, i) = @inbounds codeunit(s, i)
 # FIXME this causes Pkg.test("LazyJSON") to fail becuase the --check-bounds
 #       option is passed to the test process.
@@ -600,7 +614,17 @@ getc(s, i) = unsafe_load(pointer(s), i)
 """
 Increment `i` and get byte `i` in string `s` without bounds checking.
 """
-next_ic(s, i) = (i + 1, getc(s, i + 1))
+next_ic(s, i) = (i = next_i(s, i); (i, getc(s, i)))
+next_c(s, i) = getc(s, next_i(s, i))
+next_i(s, i) = i + 1
+next_i(s, i, n) = i + n
+
+next_ic(s::SplicedString, i) = SplicedStrings.nextcodeunit(s, i)
+next_i(s::SplicedString, i) = SplicedStrings.nextcodeunitindex(s, i)
+
+const Unsafe = Union{SplicedString}
+#next_i(s::Unsafe, i) = @inbounds nextind(s, i)
+next_i(s::Unsafe, i, n) = @inbounds nextind(s, i, n) # FIXME byte index?
 
 
 # Allow comparison of UInt8 with Char (e.g. c == '{')

@@ -54,6 +54,7 @@ https://tools.ietf.org/html/rfc7159#section-6
 function parse_number(s, i)
 
     start_i = i
+    end_i = i
 
     v = Int64(0)
 
@@ -65,6 +66,7 @@ function parse_number(s, i)
 
     # int
     while c in UInt8('0'):UInt8('9')
+        end_i = i
         v = 10v + decimal(c)
         if v < 0
             i = lastindex_of_number(s, i)     # If v overflows, give up
@@ -87,6 +89,7 @@ function parse_number(s, i)
         d = 1
         i, c = next_ic(s, i)
         while c in UInt8('0'):UInt8('9')
+            end_i = i
             f = 10f + decimal(c)
             d *= 10
             if d > 10 ^ 15
@@ -125,7 +128,7 @@ function parse_number(s, i)
         throw(JSON.ParseError(s, i, c, "unexpected end of number"))
     end
 
-    return v, i - 1
+    return v, end_i
 end
 
 decimal(c) = c - UInt8('0')
@@ -161,6 +164,12 @@ Base.promote_rule(
 
 Base.show(io::IO, n::JSON.Number) = print(io, string(n))
 
+module tmp
+import Base.==
+import ..JSON
+==(a::JSON.Number, b::JSON.Number) = convert(Base.Number, a) ==
+                                     convert(Base.Number, b)
+end
 
 
 # IOString Wrappers

@@ -2,13 +2,22 @@ module SplicedStrings
 
 using Base: @propagate_inbounds
 
+const Fragment = SubString{String}
 
-struct SplicedString <: AbstractString
-    v::Vector{AbstractString}
-    SplicedString() = new([])
-    SplicedString(a) = new(splice_vector(a))
-    SplicedString(a...) = new(splice_vector(a))
+mutable struct SplicedString <: AbstractString
+    v::Vector{Fragment}
+    ncodeunits::Int
+    SplicedString() = SplicedString([], 0)
+    SplicedString(a) = update!(new(splice_vector(a), 0))
+    SplicedString(a...) = update!(new(splice_vector(a), 0))
 end
+
+function update!(s::SplicedString)
+    l = length(s.v)
+    s.ncodeunits = l == 0 ? 0 : (l - 1) << fragment_bits | ncodeunits(last(s.v))
+    return s
+end
+
 
 SplicedString(s::SplicedString) = s
 
@@ -64,16 +73,18 @@ const fragment_bits = 40
 const index_mask = 2 ^ fragment_bits - 1
 const fragment_mask = ~index_mask
 
-function fragment_si(s::SplicedString, i)
+@propagate_inbounds function fragment_si(s::SplicedString, i::Int)
     n = i >> fragment_bits + 1
-    @inbounds f = s.v[n]
+    v = s.v
+    f = @inbounds v[n]
     i = i & index_mask
     return f, i
 end
 
-function fragment(s::SplicedString, i)
+@propagate_inbounds function fragment(s::SplicedString, i::Int)
     n = i >> fragment_bits + 1
-    f = s.v[n]
+    v = s.v
+    f = @inbounds v[n]
     i = i & index_mask
     return f, n, i
 end
@@ -154,7 +165,10 @@ end
 # Modification Interface
 
 Base.append!(ss::SplicedString, s) = append!(s, string(s))
-Base.append!(ss::SplicedString, s::AbstractString) = push!(ss.v, s)
+function Base.append!(ss::SplicedString, s::AbstractString)
+    push!(ss.v, s)
+    update!(ss)
+end
 
 Base.splice!(s::SplicedString, i::UnitRange, x) =
     splice!(s, i.start, i.stop, x)
@@ -194,6 +208,7 @@ function Base.splice!(s::SplicedString, i::Int, j::Int, x)
     @assert !any(i -> i isa SubString{SplicedString}, v)
 
     splice!(s.v, i_n:j_n-1, v)              # Splice the new fragments into `s`.
+    update!(s)
 end
 
 
@@ -202,40 +217,89 @@ end
 
 Base.codeunit(s::SplicedString) = UInt8
 
-@propagate_inbounds Base.codeunit(s::SplicedString, i::Int) =
+@propagate_inbounds Base.codeunit(s::SplicedString, i::Int)::UInt8 =
     codeunit(fragment_si(s, i)...)
 
 densecodeunits(s::SplicedString) = SplicedCodeUnits(s)
 
-function Base.ncodeunits(s::SplicedString)
-    l = length(s.v)
-    return l == 0 ? 0 : (l - 1) << fragment_bits | ncodeunits(last(s.v))
-end
+Base.ncodeunits(s::SplicedString) = s.ncodeunits
 
 Base.length(s::SplicedString) = isempty(s.v) ? 0 : sum(length, s.v)
+
+function Base.length(s::SplicedString, i::Int, j::Int)
+
+    i_f, i_n, i_i = fragment(s, i)          # Exctract fragment,
+    j_f, j_n, j_i = fragment(s, j)          # number and index.
+
+    if i_n > j_n
+        return 0
+    end
+
+    if i_n == j_n
+        return length(i_f, i_i, j_i)
+    end
+
+    return length(i_f, i_i, lastindex(i_f)) +  
+           (j_n <= i_n + 1 ? 0 : sum(length, view(s.v, i_n+1:j_n-1))) +
+           length(j_f, 1, j_i)
+end
+
+@propagate_inbounds(
+function nextcodeunitindex(s::SplicedString, i::Integer)
+    i += 1
+    fs, fi = fragment_si(s, i)
+    l = ncodeunits(fs)
+    if fi > l
+        n = i >> fragment_bits + 1
+        if n < length(s.v)
+            i = n << fragment_bits | 1
+        end
+    end
+    return i
+end)
+
+@propagate_inbounds(
+function nextcodeunit(s::SplicedString, i::Integer)
+    i += 1
+    fs, fi = fragment_si(s, i)
+    c = @inbounds codeunit(fs, fi)
+    l = ncodeunits(fs)
+    if fi > l
+        n = i >> fragment_bits + 1
+        if n < length(s.v)
+            i = n << fragment_bits | 1
+            c = @inbounds codeunit(s, i)
+        end
+    end
+    return i, c
+end)
 
 @propagate_inbounds Base.isvalid(s::SplicedString, i::Int) =
     isempty(s.v) ? false : isvalid(fragment_si(s, i)...)
 
-@propagate_inbounds function Base.next(s::SplicedString, i::Integer)
+
+@propagate_inbounds(
+function Base.next(s::SplicedString, i::Integer)
     fs, fi = fragment_si(s, i)
-    c, fi = next(fs, fi)
+    c, fi = @inbounds next(fs, fi)
     l = ncodeunits(fs)
-    if fi <= l
-        i = i & fragment_mask | fi
-    else
-        i = nextind(s, i)
+    i = i & fragment_mask | fi
+    if fi > l
+        n = i >> fragment_bits + 1
+        if n < length(s.v)
+            i = n << fragment_bits | 1
+        end
     end
     return c, i
-end
+end)
 
-
-function Base.nextind(s::SplicedString, i::Int)
+@propagate_inbounds(
+function Base.nextind(s::SplicedString, i::Int)::Int
     fs, fi = fragment_si(s, i)
     if fi == 0
         return i | 1
     end
-    fi = nextind(fs, fi)
+    fi = @inbounds nextind(fs, fi)
     l = ncodeunits(fs)
     if fi > l
         n = i >> fragment_bits + 1
@@ -244,11 +308,13 @@ function Base.nextind(s::SplicedString, i::Int)
         end
     end
     return i & fragment_mask | fi
-end
+end)
 
+@propagate_inbounds(
 Base.thisind(s::SplicedString, i::Int) = i & fragment_mask |
-                                         thisind(fragment_si(s, i)...)
+                                         thisind(fragment_si(s, i)...))
 
+@propagate_inbounds(
 function Base.prevind(s::SplicedString, i::Int)
     fs, fi = fragment_si(s, i)
     fi = prevind(fs, fi)
@@ -262,7 +328,7 @@ function Base.prevind(s::SplicedString, i::Int)
         end
     end
     return i & fragment_mask | fi
-end
+end)
 
 
 

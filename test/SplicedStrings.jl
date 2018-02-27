@@ -164,6 +164,14 @@ i = 3 << 40 | 1 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test 
 i = 3 << 40 | 2 ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i)                                       ; @test prevind(ss, i) == i - 1
                   @test ncodeunits(ss) == 3 << 40 | 1
                   @test length(ss) == 12
+                  @test length(ss,           1, 3 << 40 | 1) == 12
+                  @test length(ss,           2, 2 << 40 | 5) == 10
+                  @test length(ss,           3, 2 << 40 | 4) == 8
+                  @test length(ss,           4, 2 << 40 | 3) == 6
+                  @test length(ss,           5, 2 << 40 | 2) == 4
+                  @test length(ss, 1 << 40 | 1, 2 << 40 | 1) == 2
+                  @test length(ss, 1 << 40 | 1, 1 << 40 | 1) == 1
+                  @test length(ss, 1 << 40 | 1,           5) == 0
 
 
 ss = SS(["\u1234x", "x\u1234"])
@@ -227,6 +235,13 @@ cu = LazyJSON.SplicedStrings.densecodeunits(ss)
 @test  cu[9] == UInt8('r')
 @test cu[10] == UInt8('e')
 @test cu[11] == UInt8('e')
+
+ncu = LazyJSON.SplicedStrings.nextcodeunit
+
+@test ncu(ss, 0) == (1, UInt8('o'))
+@test ncu(ss, 1) == (2, UInt8('n'))
+@test ncu(ss, 2) == (3, UInt8('e'))
+@test ncu(ss, 3) == (1 << 40 | 1, UInt8('t'))
 
 
 end # @testset "SplicedString"
