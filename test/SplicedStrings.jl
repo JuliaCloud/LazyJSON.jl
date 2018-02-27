@@ -6,10 +6,12 @@ using LazyJSON
 sv = LazyJSON.SplicedStrings.splice_vector
 SS = LazyJSON.SplicedStrings.SplicedString
 
+FI(n, i) = n << LazyJSON.SplicedStrings.fragment_bits | i + LazyJSON.SplicedStrings.index_offset
+
 @test SS("Foo").v == ["Foo"]
 @test SS(SubString("Food", 1, 3)).v == ["Foo"]
-@test SS(SubString(SS("Food"), 1, 3)).v == ["Foo"]
-@test SS(SubString(SS("Food"), 1, 3)).v[1] isa SubString{String}
+@test SS(SubString(SS("Food"), 1, FI(0,3))).v == ["Foo"]
+@test SS(SubString(SS("Food"), 1, FI(0,3))).v[1] isa SubString{String}
 @test SS("Foo", "Bar").v == ["Foo", "Bar"]
 @test SS(SS("Foo", "Bar")).v == ["Foo", "Bar"]
 
@@ -43,42 +45,42 @@ SS = LazyJSON.SplicedStrings.SplicedString
 
 # Simple insert
 ss = SS("Foo", "Bar")
-splice!(ss, 1 << 40 | 1, 1 << 40 | 0, "d")
+splice!(ss, FI(1,1), FI(1,0), "d")
 @test ss == "FoodBar"
 @test ss.v == ["Foo", "d", "Bar"]
 
 # Replace fragment prefix
 ss = SS("Foo", "Bar")
-splice!(ss, 1 << 40 | 1, 1 << 40 | 1, "Be")
+splice!(ss, FI(1,1), FI(1,1), "Be")
 @test ss == "FooBear"
 @test ss.v == ["Foo", "Be", "ar"]
 
 # Replace whole fragment
-splice!(ss, 1 << 40 | 1, 1 << 40 | 2, "C")
+splice!(ss, FI(1,1), FI(1,2), "C")
 @test ss == "FooCar"
 @test ss.v == ["Foo", "C", "ar"]
 
 # Replace two whole fragments
 ss = SS("Foo", "XXX", "YYY", "Bar")
-splice!(ss, 1 << 40 | 1, 2 << 40 | 3, "_")
+splice!(ss, FI(1,1), FI(2,3), "_")
 @test ss == "Foo_Bar"
 @test ss.v == ["Foo", "_", "Bar"]
 
 # Replace three whole fragments
 ss = SS("Foo", "XXX", "YYY", "Bar")
-splice!(ss, 1 << 40 | 1, 3 << 40 | 3, "_")
+splice!(ss, FI(1,1), FI(3,3), "_")
 @test ss == "Foo_"
 @test ss.v == ["Foo", "_"]
 
 # Replace all fragments
 ss = SS("Foo", "XXX", "YYY", "Bar")
-splice!(ss, 1 : 3 << 40 | 3, "_")
+splice!(ss, 1 : FI(3,3), "_")
 @test ss == "_"
 @test ss.v == ["_"]
 
 # Replace all fragments with nothing
 ss = SS("Foo", "XXX", "YYY", "Bar")
-splice!(ss, 1 , lastindex(ss), "")
+splice!(ss, firstindex(ss), lastindex(ss), "")
 @test ss == ""
 @test ss.v == []
 
@@ -90,41 +92,41 @@ splice!(ss, i , i+2, "")
 
 # Replace two whole fragments and part of another
 ss = SS("Foo", "XXX", "YYY", "Bar")
-splice!(ss, 1 << 40 | 1, 3 << 40 | 2, "u")
+splice!(ss, FI(1,1), FI(3,2), "u")
 @test ss == "Foour"
 @test ss.v == ["Foo", "u", "r"]
 
 # Replace fragment suffix
 ss = SS("Foo", "Bar")
-splice!(ss, 3, 3, "g")
+splice!(ss, FI(0,3), FI(0,3), "g")
 @test ss == "FogBar"
 @test ss.v == ["Fo", "g", "Bar"]
 
 # Replace fragment suffix and prefix
 ss = SS("Foo", "Bar")
-splice!(ss, 3, 1 << 40 | 2, "lde")
+splice!(ss, FI(0,3), FI(1,2), "lde")
 @test ss == "Folder"
 @test ss.v == ["Fo", "lde", "r"]
 
 # Replace fragment suffix and whole fragment and prefix
 ss = SS("Foo", "XXX", "Bar")
-splice!(ss, 3, 2 << 40 | 2, "lde")
+splice!(ss, FI(0,3), FI(2,2), "lde")
 @test ss == "Folder"
 @test ss.v == ["Fo", "lde", "r"]
 
 # Replace fragment suffix and whole fragment and prefix with multiple others
 ss = SS("Foo", "XXX", "Bar")
-splice!(ss, 2, 2 << 40 | 2, ["w", "oooo", "aaaaaa", "rr"])
+splice!(ss, FI(0,2), FI(2,2), ["w", "oooo", "aaaaaa", "rr"])
 @test ss == "Fwooooaaaaaarrr"
 @test ss.v == ["F", "w", "oooo", "aaaaaa", "rr", "r"]
 
 ss = SS("Foo", "XXX", "Bar")
-splice!(ss, 2, 2 << 40 | 2, SS(SS("w", "oooo"), "aaaaaa", "rr"))
+splice!(ss, FI(0,2), FI(2,2), SS(SS("w", "oooo"), "aaaaaa", "rr"))
 @test ss == "Fwooooaaaaaarrr"
 @test ss.v == ["F", "w", "oooo", "aaaaaa", "rr", "r"]
 
 ss = SS("Foo", "XXX", "Bar")
-splice!(ss, 2, 2 << 40 | 2, [SS("w", "oooo"), "aaaaaa", SS("rr")])
+splice!(ss, FI(0,2), FI(2,2), [SS("w", "oooo"), "aaaaaa", SS("rr")])
 @test ss == "Fwooooaaaaaarrr"
 @test String(ss) == "Fwooooaaaaaarrr"
 @test ss.v == ["F", "w", "oooo", "aaaaaa", "rr", "r"]
@@ -148,64 +150,64 @@ ss = SS("AAA", sss, "BBB")
 ss = SS(["Hello", " ", "world", "!"])
 @test ss == "Hello world!"
 
-i = 0 << 40 | 0 ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 1
-i = 0 << 40 | 1 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1       ; @test prevind(ss, i) == i - 1       ; @test codeunit(ss, i) == UInt8('H')
-i = 0 << 40 | 2 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1       ; @test prevind(ss, i) == i - 1       ; @test codeunit(ss, i) == UInt8('e')
-i = 0 << 40 | 3 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1       ; @test prevind(ss, i) == i - 1       ; @test codeunit(ss, i) == UInt8('l')
-i = 0 << 40 | 4 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1       ; @test prevind(ss, i) == i - 1       ; @test codeunit(ss, i) == UInt8('l')
-i = 0 << 40 | 5 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == 1 << 40 | 1 ; @test prevind(ss, i) == i - 1       ; @test codeunit(ss, i) == UInt8('o')
-i = 1 << 40 | 1 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == 2 << 40 | 1 ; @test prevind(ss, i) == 0 << 40 | 5 ; @test codeunit(ss, i) == UInt8(' ')
-i = 2 << 40 | 1 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1       ; @test prevind(ss, i) == 1 << 40 | 1 ; @test codeunit(ss, i) == UInt8('w')
-i = 2 << 40 | 2 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1       ; @test prevind(ss, i) == i - 1       ; @test codeunit(ss, i) == UInt8('o')
-i = 2 << 40 | 3 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1       ; @test prevind(ss, i) == i - 1       ; @test codeunit(ss, i) == UInt8('r')
-i = 2 << 40 | 4 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1       ; @test prevind(ss, i) == i - 1       ; @test codeunit(ss, i) == UInt8('l')
-i = 2 << 40 | 5 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == 3 << 40 | 1 ; @test prevind(ss, i) == i - 1       ; @test codeunit(ss, i) == UInt8('d')
-i = 3 << 40 | 1 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1       ; @test prevind(ss, i) == 2 << 40 | 5 ; @test codeunit(ss, i) == UInt8('!')
-i = 3 << 40 | 2 ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i)                                       ; @test prevind(ss, i) == i - 1
-                  @test ncodeunits(ss) == 3 << 40 | 1
-                  @test length(ss) == 12
-                  @test length(ss,           1, 3 << 40 | 1) == 12
-                  @test length(ss,           2, 2 << 40 | 5) == 10
-                  @test length(ss,           3, 2 << 40 | 4) == 8
-                  @test length(ss,           4, 2 << 40 | 3) == 6
-                  @test length(ss,           5, 2 << 40 | 2) == 4
-                  @test length(ss, 1 << 40 | 1, 2 << 40 | 1) == 2
-                  @test length(ss, 1 << 40 | 1, 1 << 40 | 1) == 1
-                  @test length(ss, 1 << 40 | 1,           5) == 0
+i =      0  ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i) ; @test nextind(ss, i) == 1
+i =      1  ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == FI(0,2) ; @test prevind(ss, i) == i - 1   ; @test codeunit(ss, i) == UInt8('H')
+i = FI(0,2) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1   ; @test prevind(ss, i) == i - 1   ; @test codeunit(ss, i) == UInt8('e')
+i = FI(0,3) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1   ; @test prevind(ss, i) == i - 1   ; @test codeunit(ss, i) == UInt8('l')
+i = FI(0,4) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1   ; @test prevind(ss, i) == i - 1   ; @test codeunit(ss, i) == UInt8('l')
+i = FI(0,5) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == FI(1,1) ; @test prevind(ss, i) == i - 1   ; @test codeunit(ss, i) == UInt8('o')
+i = FI(1,1) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == FI(2,1) ; @test prevind(ss, i) == FI(0,5) ; @test codeunit(ss, i) == UInt8(' ')
+i = FI(2,1) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1   ; @test prevind(ss, i) == FI(1,1) ; @test codeunit(ss, i) == UInt8('w')
+i = FI(2,2) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1   ; @test prevind(ss, i) == i - 1   ; @test codeunit(ss, i) == UInt8('o')
+i = FI(2,3) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1   ; @test prevind(ss, i) == i - 1   ; @test codeunit(ss, i) == UInt8('r')
+i = FI(2,4) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1   ; @test prevind(ss, i) == i - 1   ; @test codeunit(ss, i) == UInt8('l')
+i = FI(2,5) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == FI(3,1) ; @test prevind(ss, i) == i - 1   ; @test codeunit(ss, i) == UInt8('d')
+i = FI(3,1) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1   ; @test prevind(ss, i) == FI(2,5) ; @test codeunit(ss, i) == UInt8('!')
+i = FI(3,2) ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i)                                   ; @test prevind(ss, i) == i - 1
+              @test ncodeunits(ss) == FI(3,1)
+              @test length(ss) == 12
+              @test length(ss,      1 , FI(3,1)) == 12
+              @test length(ss, FI(0,2), FI(2,5)) == 10
+              @test length(ss, FI(0,3), FI(2,4)) == 8
+              @test length(ss, FI(0,4), FI(2,3)) == 6
+              @test length(ss, FI(0,5), FI(2,2)) == 4
+              @test length(ss, FI(1,1), FI(2,1)) == 2
+              @test length(ss, FI(1,1), FI(1,1)) == 1
+              @test length(ss, FI(1,1), FI(0,5)) == 0
 
 
 ss = SS(["\u1234x", "x\u1234"])
 @test ss == "ሴxxሴ"
 
-i = 0 << 40 | 0 ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 1
-i = 0 << 40 | 1 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 3
-i = 0 << 40 | 2 ; @test thisind(ss, i) == i - 1 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 2
-i = 0 << 40 | 3 ; @test thisind(ss, i) == i - 2 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 1
-i = 0 << 40 | 4 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == 1 << 40 | 1
-i = 1 << 40 | 1 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1
-i = 1 << 40 | 2 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 3
-i = 1 << 40 | 3 ; @test thisind(ss, i) == i - 1 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 2
-i = 1 << 40 | 4 ; @test thisind(ss, i) == i - 2 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 1
-i = 1 << 40 | 5 ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i)
-                  @test ncodeunits(ss) == 1 << 40 | 4
-                  @test length(ss) == 4
+i =      0  ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i) ; @test nextind(ss, i) == 1
+i =      1  ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == FI(0,2) + 2
+i = FI(0,2) ; @test thisind(ss, i) == i - 1 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 2
+i = FI(0,3) ; @test thisind(ss, i) == i - 2 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 1
+i = FI(0,4) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == FI(1,1)
+i = FI(1,1) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1
+i = FI(1,2) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 3
+i = FI(1,3) ; @test thisind(ss, i) == i - 1 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 2
+i = FI(1,4) ; @test thisind(ss, i) == i - 2 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 1
+i = FI(1,5) ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i)
+              @test ncodeunits(ss) == FI(1,4)
+              @test length(ss) == 4
 
 
 ss = SS(["x\u1234", "\u1234x"])
 @test ss == "xሴሴx"
 
-i = 0 << 40 | 0 ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 1
-i = 0 << 40 | 1 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1
-i = 0 << 40 | 2 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == 1 << 40 | 1
-i = 0 << 40 | 3 ; @test thisind(ss, i) == i - 1 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == 1 << 40 | 1
-i = 0 << 40 | 4 ; @test thisind(ss, i) == i - 2 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == 1 << 40 | 1
-i = 1 << 40 | 1 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 3
-i = 1 << 40 | 2 ; @test thisind(ss, i) == i - 1 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 2
-i = 1 << 40 | 3 ; @test thisind(ss, i) == i - 2 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 1
-i = 1 << 40 | 4 ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1
-i = 1 << 40 | 5 ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i)
-                  @test ncodeunits(ss) == 1 << 40 | 4
-                  @test length(ss) == 4
+i =      0  ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i) ; @test nextind(ss, i) == 1
+i =      1  ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == FI(0,2)
+i = FI(0,2) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == FI(1,1)
+i = FI(0,3) ; @test thisind(ss, i) == i - 1 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == FI(1,1)
+i = FI(0,4) ; @test thisind(ss, i) == i - 2 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == FI(1,1)
+i = FI(1,1) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 3
+i = FI(1,2) ; @test thisind(ss, i) == i - 1 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 2
+i = FI(1,3) ; @test thisind(ss, i) == i - 2 ; @test !isvalid(ss, i) ; @test nextind(ss, i) == i + 1
+i = FI(1,4) ; @test thisind(ss, i) == i     ; @test  isvalid(ss, i) ; @test nextind(ss, i) == i + 1
+i = FI(1,5) ; @test thisind(ss, i) == i     ; @test !isvalid(ss, i)
+              @test ncodeunits(ss) == FI(1,4)
+              @test length(ss) == 4
 
 
 ss = SS("one", "two", "three")
@@ -221,6 +223,7 @@ i = findfirst(equalto('w'), ss)
 @test ss[i] == 'w'
 
 
+#=
 ss = SS("one", "two", "three")
 cu = LazyJSON.SplicedStrings.densecodeunits(ss)
 
@@ -235,13 +238,14 @@ cu = LazyJSON.SplicedStrings.densecodeunits(ss)
 @test  cu[9] == UInt8('r')
 @test cu[10] == UInt8('e')
 @test cu[11] == UInt8('e')
+=#
 
 ncu = LazyJSON.SplicedStrings.nextcodeunit
 
-@test ncu(ss, 0) == (1, UInt8('o'))
-@test ncu(ss, 1) == (2, UInt8('n'))
-@test ncu(ss, 2) == (3, UInt8('e'))
-@test ncu(ss, 3) == (1 << 40 | 1, UInt8('t'))
+@test ncu(ss,         0) == (     1,  UInt8('o'))
+@test ncu(ss,        1 ) == (FI(0,2), UInt8('n'))
+@test ncu(ss,   FI(0,2)) == (FI(0,3), UInt8('e'))
+@test ncu(ss,   FI(0,3)) == (FI(1,1), UInt8('t'))
 
 
 end # @testset "SplicedString"

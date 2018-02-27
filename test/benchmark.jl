@@ -86,7 +86,6 @@ end
 =#
 
 
-#=
 println("\n")
 n > 1 && println("Update a value:")
 
@@ -94,9 +93,11 @@ n > 1 && print("LazyJSON.jl:")
 GC.gc()
 @time for i in 1:n
     r = LazyJSON.value(j)
-    s = string(LazyJSON.splice(r, r.shapes.scope.enum[1], "foo"))
-    r = LazyJSON.value(s)
-    @assert r.shapes.scope.enum[1] == "foo"
+    r = LazyJSON.splice(r, r.shapes.ZoneNameStringList.member.shape, "foo")
+    r = LazyJSON.splice(r, r.shapes.scope.enum[1], "bar")
+    r = LazyJSON.splice(r, r.shapes.scope.enum[2], "fum")
+    r = LazyJSON.value(string(r))
+    @assert r.shapes.scope.enum[1] == "bar"
 end
 
 
@@ -104,12 +105,13 @@ n > 1 && print("JSON.jl:    ")
 GC.gc()
 @time for i in 1:n
     r = JSON.parse(j)
-    r["shapes"]["scope"]["enum"][1] = "foo"
+    r["shapes"]["ZoneNameStringList"]["member"]["shape"] = "foo"
+    r["shapes"]["scope"]["enum"][1] = "bar"
+    r["shapes"]["scope"]["enum"][2] = "fum"
     s = JSON.json(r)
     r = JSON.parse(s)
-    @assert r["shapes"]["scope"]["enum"][1] == "foo"
+    @assert r["shapes"]["scope"]["enum"][1] == "bar"
 end
-=#
 
 
 
