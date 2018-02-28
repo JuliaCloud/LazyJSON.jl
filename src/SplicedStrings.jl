@@ -1,5 +1,21 @@
 module SplicedStrings
 
+#=
+FIXME
+
+Options for fast parser traversal:
+
+    Codunits iterator with tuple (fragment_n, max_pointer, pointer)
+
+    64-bit index containing [fragment_n, sentinal_bits, p]
+        where p is a pointer into s.v[fragment_n]
+        and sentinal_bits are the last few bits for the max value of i
+        if the sentinal_bits match, check bounds of s.v[fragment_n]
+            otherwise, just increment pointer
+=#
+
+
+
 using Base: @propagate_inbounds
 
 const Fragment = SubString{String}
@@ -313,14 +329,17 @@ function nextcodeunit(s::SplicedString, i::Integer)
     end
     i += 1
     fs, fi = fragment_si(s, i)
-    c = @inbounds codeunit(fs, fi)
     l = ncodeunits(fs)
     if fi > l
         n = i >> fragment_bits + 1
         if n < length(s.v)
             i = n << fragment_bits | 1 + index_offset
             c = @inbounds codeunit(s, i)
+        else
+            c = 0x00
         end
+    else
+        c = @inbounds codeunit(fs, fi)
     end
     return i, c
 end)
