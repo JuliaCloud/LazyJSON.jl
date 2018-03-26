@@ -639,9 +639,9 @@ next_i(s::Unsafe, i, n) = @inbounds nextind(s, i, n) # FIXME byte index?
 function Base.show(io::IO, e::JSON.ParseError)
 
     s = e.bytes
-    l = findprev(equalto('\n'), s, e.index)
+    l = findprev(isequal('\n'), s, e.index)
     l = l != nothing ? l + 1 : 1
-    r = findnext(equalto('\n'), s, max(1, e.index-1))
+    r = findnext(isequal('\n'), s, max(1, e.index-1))
     r = r != nothing ? r - 1 : length(s)
     l = min(length(s), l)
     line_number = length(split(SubString(s, 1, l), '\n'))
