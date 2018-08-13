@@ -361,7 +361,8 @@ function Base.isvalid(s::SplicedString, i::Int)
 end)
 
 
-#FIXME
+#FIXME 
+#=
 @propagate_inbounds(
 function Base.next(s::SplicedString, i::Integer)
     fs, fi = fragment_si(s, i)
@@ -376,6 +377,7 @@ function Base.next(s::SplicedString, i::Integer)
     end
     return c, i
 end)
+=#
 
 @propagate_inbounds(
 function Base.nextind(s::SplicedString, i::Int)::Int
