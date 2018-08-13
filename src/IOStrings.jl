@@ -38,12 +38,15 @@ struct IOString{T <: IO} <: AbstractString
     buf::IOBuffer
 end
 
+struct IncompleteError <: Exception
+end
+
 const ASCII_ETB = 0x17
 
 function IOString(io::T) where T <: IO
     ios = IOString{T}(io, IOBuffer())
     Base.ensureroom(ios.buf, 1)
-    ios.buf.data[1] = ASCII_ETB = 0x17
+    ios.buf.data[1] = ASCII_ETB
     @assert incomplete(ios)
     return ios
 end
@@ -55,14 +58,27 @@ Base.String(s::IOString) = convert(Base.String, s)
 
 Base.IteratorSize(::Type{IOString}) = Base.SizeUnknown()
 Base.ncodeunits(s::IOString) = s.buf.size
+# FIXME   pump here ??
 Base.codeunit(s::IOString) = UInt8
-@propagate_inbounds Base.codeunit(s::IOString, i::Integer) = s.buf.data[i]
+
+#FIXME
+#@propagate_inbounds Base.codeunit(s::IOString, i::Integer) = s.buf.data[i]
+@propagate_inbounds function Base.codeunit(s::IOString, i::Integer)
+    c = s.buf.data[i]
+    while c == IOStrings.ASCII_ETB && bytesavailable(s.io) > 0
+        pump(s)
+        c = s.buf.data[i]
+    end
+    return c
+end
+
 Base.pointer(s::IOString) = pointer(s.buf.data)
 Base.pointer(s::IOString, i) = pointer(s.buf.data, i)
 
-incomplete(s::IOString) = codeunit(s, ncodeunits(s) + 1) == ASCII_ETB
+incomplete(s::IOString) = s.buf.data[ncodeunits(s) + 1] == ASCII_ETB
 
 recoverable(e) = false
+recoverable(::IncompleteError) = true
 
 @inline function pump(f::Function, s::IOString)
     while true

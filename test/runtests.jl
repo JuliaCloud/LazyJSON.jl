@@ -6,10 +6,10 @@ using DataStructures
 module JSON_jl
     using JSON
 end
-
 const JSON = LazyJSON
 
-include("SplicedStrings.jl")
+#FIXME
+#include("SplicedStrings.jl")
 
 
 struct Foo
@@ -56,7 +56,7 @@ end
 
 
 
-#include("AbstractString.jl")
+include("AbstractString.jl")
 
 """
 https://tools.ietf.org/html/rfc7159#section-13
@@ -548,6 +548,8 @@ v = convert(Repo, LazyJSON.value(s))
 
 end #testset
 
+
+@static if LazyJSON.enable_iostrings
 #-------------------------------------------------------------------------------
 @testset "IOString" begin
 #-------------------------------------------------------------------------------
@@ -567,7 +569,8 @@ end #testset
         end
 
         @test isempty(log)
-        write(io, "a") ; sleep(0.01)  ;@test log[1] isa LazyJSON.ParseError
+        write(io, "a")
+        while isempty(log) sleep(0.01) end; @test log[1] isa LazyJSON.ParseError
         close(io)
     end
 end
@@ -585,7 +588,8 @@ end
         write(io, "1") ; sleep(0.01)  ;@test isempty(log)
         write(io, "2") ; sleep(0.01)  ;@test isempty(log)
         write(io, "3") ; sleep(0.01)  ;@test isempty(log)
-        close(io)      ; sleep(0.01)  ;@test log[1] == 123
+        close(io)      ; while isempty(log) sleep(0.01) end
+                                       @test log[1] == 123
     end
 end
 
@@ -602,11 +606,11 @@ end
         @test isempty(log)
         write(io, "\"1") ; sleep(0.01)  ;@test isempty(log)
         write(io, "2")   ; sleep(0.01)  ;@test isempty(log)
-        write(io, "3\"") ; sleep(0.01)  ;@test log[1] == "123"
+        write(io, "3\"") ; while isempty(log) sleep(0.01) end
+                                         @test log[1] == "123"
         close(io)
     end
 end
-
 
 @testset "IOString Lazy String" begin
     log = [] ; io = Base.BufferStream()
@@ -727,8 +731,10 @@ end
 end
 
 end #testset
+end #enable_iostring
 
 
+#=
 #-------------------------------------------------------------------------------
 @testset "splice" begin
 #-------------------------------------------------------------------------------
@@ -824,3 +830,4 @@ b = splice(j, ["owner", "login"], "foo")
 }"""
 
 end #testset
+=#

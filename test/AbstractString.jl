@@ -96,12 +96,10 @@ js = JSON.String(j, 1)
 @test ncodeunits(js) == 6
 @test js == "Hello!"
 
-i = start(js)
-@test i == 1
-c, i = next(js, i)
+c, i = iterate(js)
 @test c == 'H'
 @test i == 2
-c, i = next(js, i)
+c, i = iterate(js, i)
 @test c == 'e'
 
 @test isvalid(js, 1)
