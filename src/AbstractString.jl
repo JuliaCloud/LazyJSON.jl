@@ -40,8 +40,11 @@ Base.codeunit(s::JSON.String) = codeunit(s.s)
 Base.codeunit(s::JSON.String, i::Integer) = codeunit(s.s, s.i + i))
 
 @propagate_inbounds(
-function Base.next(s::JSON.String, i::Integer)
+function Base.iterate(s::JSON.String, i::Integer)
     i, c = json_char(s.s, s.i + i)
+    if c == nothing
+        return nothing
+    end
     return c, i - s.i
 end)
 
@@ -135,14 +138,17 @@ Return a `Char` from a JSON string `s` at index `i`.
 Unescpe character if needed.
 """
 @propagate_inbounds(
-function json_char(s, i)::Tuple{Int, Char}
+function json_char(s, i)::Tuple{Int, Union{Char,Nothing}}
 
     c = getc(s, i)
     l = ncodeunits(s)
 
     if c != '\\' || next_i(s, i) > l
         c = s[i]
-        return nextind(s, i), s[i]
+        if c == '"'
+            c = nothing
+        end
+        return nextind(s, i), c
     end
 
     i, c = json_unescape_char(s, i, c, l)
@@ -160,7 +166,7 @@ function json_unescape_char(s, i, c, l)::Tuple{Int, Union{UInt8,UInt16,UInt32}}
     uc = unescape_c(c)
     if uc == 0x00 ||                    # If the character after '\' was not
        uc == 'u' && next_i(s, i, 4) > l # escapable, or if there aren't enough
-        return i, UInt8('\\')           # bytes for \uXXXX, leave the \ as0is.
+        return i, UInt8('\\')           # bytes for \uXXXX, leave the \ as is.
     end
 
     if uc != 'u'                        # Simple single ecaped character.
@@ -287,8 +293,9 @@ end
 
 #FIXME
 #https://github.com/JuliaLang/julia/commit/1f0c6fa35ab64ad66a5bb413fad474e2c722c290#r27686527
-Base.@propagate_inbounds function Base.next(s::IOString, i::Int)
+Base.@propagate_inbounds function Base.iterate(s::IOString, i::Int)
     b = codeunit(s, i)
+    i > ncodeunits(s) && return nothing
     u = UInt32(b) << 24
     Base.between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
     return next_continued(s, i, u)
