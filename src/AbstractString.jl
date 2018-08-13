@@ -40,7 +40,7 @@ Base.codeunit(s::JSON.String) = codeunit(s.s)
 Base.codeunit(s::JSON.String, i::Integer) = codeunit(s.s, s.i + i))
 
 @propagate_inbounds(
-function Base.iterate(s::JSON.String, i::Integer)
+function Base.iterate(s::JSON.String, i::Integer=1)
     i, c = json_char(s.s, s.i + i)
     if c == nothing
         return nothing

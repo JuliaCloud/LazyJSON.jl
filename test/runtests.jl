@@ -539,7 +539,7 @@ v = convert(Repo, LazyJSON.value(gist_json))
 @test v.owner.login == "octocat"
 
 s = "XXX $gist_json ~YYY"
-s = SubString(s, 5, findfirst(equalto('~'), s) - 2)
+s = SubString(s, 5, findfirst(isequal('~'), s) - 2)
 @test s == gist_json
 @test s isa SubString{String}
 
