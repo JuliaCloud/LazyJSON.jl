@@ -49,9 +49,8 @@ Base.IteratorEltype(::Type{PropertyDict{K,V,T}}) where {K,V,T} = Base.IteratorEl
 Base.getindex(d::PropertyDict, i) = getindex(unwrap(d), i)
 Base.get(d::PropertyDict, k, default) = get(unwrap(d), k, default)
 Base.length(d::PropertyDict) = length(unwrap(d))
-Base.start(d::PropertyDict) = start(unwrap(d))
-Base.done(d::PropertyDict, i) = done(unwrap(d), i)
-Base.next(d::PropertyDict, i) = next(unwrap(d), i)
+Base.iterate(d::PropertyDict) = iterate(unwrap(d))
+Base.iterate(d::PropertyDict, i) = iterate(unwrap(d), i)
 
 Base.string(d::PropertyDict) = string(unwrap(d))
 
