@@ -85,7 +85,7 @@ splice!(ss, firstindex(ss), lastindex(ss), "")
 @test ss.v == []
 
 ss = SS("AAA", "BBB", "CCC")
-i = findfirst(equalto('B'), ss)
+i = findfirst(isequal('B'), ss)
 splice!(ss, i , i+2, "")
 @test ss == "AAACCC"
 @test ss.v == ["AAA", "CCC"]
@@ -137,11 +137,11 @@ ss = SS(["Hello", " ", "world", "!"])
 @test String(ss) == "Hello world!"
 
 ss = SS("xxxx", "Hello", " ", "world", "!", "yyyy")
-@test SubString(ss, findfirst(equalto('l'), ss),
-                    findfirst(equalto('r'), ss)) == "llo wor"
+@test SubString(ss, findfirst(isequal('l'), ss),
+                    findfirst(isequal('r'), ss)) == "llo wor"
 
-sss = SubString(ss, findfirst(equalto('l'), ss),
-                    findfirst(equalto('r'), ss))
+sss = SubString(ss, findfirst(isequal('l'), ss),
+                    findfirst(isequal('r'), ss))
 @test sss isa SubString{SS}
 
 ss = SS("AAA", sss, "BBB")
@@ -219,7 +219,7 @@ ss = SS("one", "two", "three")
 @test 'o' in ss
 @test 'h' in ss
 @test 'r' in ss
-i = findfirst(equalto('w'), ss)
+i = findfirst(isequal('w'), ss)
 @test ss[i] == 'w'
 
 
