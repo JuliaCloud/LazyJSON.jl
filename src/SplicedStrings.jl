@@ -360,24 +360,25 @@ function Base.isvalid(s::SplicedString, i::Int)
     return isvalid(fragment_si(s, i)...)
 end)
 
-
-#FIXME 
-#=
 @propagate_inbounds(
-function Base.next(s::SplicedString, i::Integer)
+function Base.iterate(s::SplicedString, i::Integer=1)
+    if i == index_offset || isempty(s.v)
+        return nothing
+    end
     fs, fi = fragment_si(s, i)
-    c, fi = @inbounds next(fs, fi)
+    c, fi = @inbounds iterate(fs, fi)
     l = ncodeunits(fs)
     i = i & fragment_mask | fi + index_offset
     if fi > l
         n = i >> fragment_bits + 1
         if n < length(s.v)
             i = n << fragment_bits | 1 + index_offset
+        else
+            i = index_offset
         end
     end
     return c, i
 end)
-=#
 
 @propagate_inbounds(
 function Base.nextind(s::SplicedString, i::Int)::Int

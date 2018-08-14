@@ -9,7 +9,6 @@ using Base: @propagate_inbounds
 
 const JSON = LazyJSON
 
-const enable_iostrings = false
 const enable_getproperty = true
 
 include("SplicedStrings.jl")            ; using .SplicedStrings: SplicedString
@@ -138,13 +137,9 @@ value(ss::SubString{<:SupportedString}, path=nothing; kw...) =
 
 value(bytes, path=nothing; kw...) = value(Base.String(bytes), path; kw...)
 
-@static if enable_iostrings
 function value(io::IO, path=nothing; kw...)
     s = IOString(io)
     return pump(() -> value(s, path; kw...), s)
-end
-else
-value(io::IO, path=nothing; kw...) = value(read(io, String), path, kw...)
 end
 
 IOStrings.recoverable(e::JSON.ParseError) = e.c == IOStrings.ASCII_ETB

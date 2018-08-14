@@ -18,7 +18,8 @@ Base.size(a::JSON.Array) = (length(a), )
 
 # Iterate
 
-function Base.iterate(j::JSON.Array, (i, c) = (j.i, 0x00))
+Base.iterate(j::JSON.Array, i = (j.i, 0x00)) = _iterate(j, i)
+function _iterate(j::JSON.Array, (i, c))
     i, c = nextindex(j, i, c)
     if c == ']'
         return nothing
@@ -35,9 +36,5 @@ Base.length(j::JSON.Array{IOString{T}}) where T =
 Base.getindex(j::JSON.Array{IOString{T}}, i::Integer) where T =
     pump(() -> getvalue(x, getindex_ic(j, i)...), j.s)
 
-# FIXME
-#Base.done(j::JSON.Array{IOString{T}}, i) where T =
-#    pump(() -> _done(j, i), j.s)
-
-#Base.next(j::JSON.Array{IOString{T}}, i) where T =
-#    pump(() -> _next(j, i), j.s)
+Base.iterate(j::JSON.Array{IOString{T}}, i = (j.i, 0x00)) where T =
+    pump(() -> _iterate(j, i), j.s)

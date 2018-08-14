@@ -40,7 +40,9 @@ Base.codeunit(s::JSON.String) = codeunit(s.s)
 Base.codeunit(s::JSON.String, i::Integer) = codeunit(s.s, s.i + i))
 
 @propagate_inbounds(
-function Base.iterate(s::JSON.String, i::Integer=1)
+Base.iterate(s::JSON.String, i::Integer=1) = _iterate(s, i))
+@propagate_inbounds(
+function _iterate(s::JSON.String, i)
     i, c = json_char(s.s, s.i + i)
     if c == nothing
         return nothing
@@ -293,7 +295,7 @@ end
 
 #FIXME
 #https://github.com/JuliaLang/julia/commit/1f0c6fa35ab64ad66a5bb413fad474e2c722c290#r27686527
-Base.@propagate_inbounds function Base.iterate(s::IOString, i::Int)
+@propagate_inbounds function Base.iterate(s::IOString, i::Int = 1)
     b = codeunit(s, i)
     i > ncodeunits(s) && return nothing
     u = UInt32(b) << 24
@@ -333,3 +335,6 @@ Base.convert(::Type{SubString}, j::JSON.String{IOString{T}}) where T =
 
 Base.ncodeunits(j::JSON.String{IOString{T}}) where T =
     pump(() -> scan_string(j.s, j.i)[1] - j.i - 1, j.s)
+
+Base.iterate(j::JSON.String{IOString{T}}, i::Integer=1) where T =
+    pump(() -> _iterate(j, i), j.s)

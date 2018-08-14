@@ -58,24 +58,19 @@ Base.String(s::IOString) = convert(Base.String, s)
 
 Base.IteratorSize(::Type{IOString}) = Base.SizeUnknown()
 Base.ncodeunits(s::IOString) = s.buf.size
-# FIXME   pump here ??
 Base.codeunit(s::IOString) = UInt8
+@propagate_inbounds Base.codeunit(s::IOString, i::Integer) = s.buf.data[i]
 
-#FIXME
-#@propagate_inbounds Base.codeunit(s::IOString, i::Integer) = s.buf.data[i]
-@propagate_inbounds function Base.codeunit(s::IOString, i::Integer)
-    c = s.buf.data[i]
-    while c == IOStrings.ASCII_ETB && bytesavailable(s.io) > 0
-        pump(s)
-        c = s.buf.data[i]
-    end
-    return c
-end
+Base.checkbounds(s::IOString, I::Union{Integer,AbstractArray}) =
+    checkbounds(Bool, s, I) ? nothing :
+              incomplete(s) ? throw(IncompleteError()) :
+                              throw(BoundsError(s, I))
+
 
 Base.pointer(s::IOString) = pointer(s.buf.data)
 Base.pointer(s::IOString, i) = pointer(s.buf.data, i)
 
-incomplete(s::IOString) = s.buf.data[ncodeunits(s) + 1] == ASCII_ETB
+incomplete(s::IOString) = codeunit(s, ncodeunits(s) + 1) == ASCII_ETB
 
 recoverable(e) = false
 recoverable(::IncompleteError) = true

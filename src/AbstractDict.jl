@@ -31,7 +31,8 @@ Base.length(a::JSON.Object) = div(collection_length(a), 2)
 
 # Iterate
 
-function Base.iterate(j::JSON.Object, (i, c) = (j.i, 0x00))
+Base.iterate(j::JSON.Object, i = (j.i, 0x00)) = _iterate(j, i)
+function _iterate(j::JSON.Object, (i, c))
 
     i, c = nextindex(j, i, c)
 
@@ -107,15 +108,11 @@ end
 
 # IOString Wrappers
 
-#FIXME
-#Base.length(j::JSON.Object{IOString{T}}) where T =
-#    pump(() -> div(collection_length(j), 2), j.s)
+Base.length(j::JSON.Object{IOString{T}}) where T =
+    pump(() -> div(collection_length(j), 2), j.s)
 
-#Base.get(j::JSON.Object{IOString{T}}, key, default) where T =
-#    pump(() -> _get(j, key, default), j.s)
+Base.get(j::JSON.Object{IOString{T}}, key, default) where T =
+    pump(() -> _get(j, key, default), j.s)
 
-#Base.done(j::JSON.Object{IOString{T}}, i) where T =
-#    pump(() -> _done(j, i), j.s)
-
-#Base.next(j::JSON.Object{IOString{T}}, i) where T =
-#    pump(() -> _next(j, i), j.s)
+Base.iterate(j::JSON.Object{IOString{T}}, i = (j.i, 0x00)) where T =
+    pump(() -> _iterate(j, i), j.s)
