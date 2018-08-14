@@ -31,30 +31,19 @@ Base.length(a::JSON.Object) = div(collection_length(a), 2)
 
 # Iterate
 
-function Base.iterate(j::JSON.Object, i = (j.i, Ref(0), 0x00))
-    if _done(j, i)
+function Base.iterate(j::JSON.Object, (i, c) = (j.i, 0x00))
+
+    i, c = nextindex(j, i, c)
+
+    if c == '}'
         return nothing
     end
-    return _next(j, i)
-end
 
-
-#Base.start(j::JSON.Object) = (j.i, Ref(0), 0x00)
-
-#Base.done(j::JSON.Object, i) = _done(j, i)
-function _done(j::JSON.Object, (i, n, c))
-    i, c = nextindex(j, i, n, c)
-    n[] = i
-    return c == '}'
-end
-
-#Base.next(j::JSON.Object, i) = _next(j, i)
-function _next(j::JSON.Object, (i, n, c))
-    i, c = nextindex(j, i, n, c)
     k = getvalue(j.s, i, c)
-    i, c = nextindex(j, i, n, c)
+    i, c = nextindex(j, i, c)
     v = getvalue(j.s, i, c)
-    return k => v, (i, n, c)
+
+    return k => v, (i, c)
 end
 
 

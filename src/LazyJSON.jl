@@ -261,8 +261,6 @@ Base.IteratorEltype(::Type{Indexes{T}}) where T = Base.EltypeUnknown()
 
 indexes(j::T) where T <: JSON.Collection = Indexes{T}(j)
 
-#Base.start(j::Indexes) = (j.j.i, 0x00)
-#Base.done(j::Indexes, (i, c)) = (c == ']' || c == '}')
 function Base.iterate(j::Indexes, (i, c)=(j.j.i, 0x00))
     if c == ']' || c == '}'
         return nothing
