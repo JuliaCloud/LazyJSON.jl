@@ -34,7 +34,7 @@ Base.length(j::JSON.Array{IOString{T}}) where T =
     pump(() -> collection_length(j), j.s)
 
 Base.getindex(j::JSON.Array{IOString{T}}, i::Integer) where T =
-    pump(() -> getvalue(x, getindex_ic(j, i)...), j.s)
+    pump(() -> getvalue(j.s, getindex_ic(j, i)...), j.s)
 
 Base.iterate(j::JSON.Array{IOString{T}}, i = (j.i, 0x00)) where T =
     pump(() -> _iterate(j, i), j.s)
