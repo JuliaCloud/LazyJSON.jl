@@ -1,7 +1,7 @@
 # AbstractDict interface for JSON Object
 
-Base.IteratorSize(::Type{JSON.Object{T}}) where T = Base.SizeUnknown()
-Base.IteratorEltype(::Type{JSON.Object{T}}) where T = Base.EltypeUnknown()
+Base.IteratorSize(::Type{JSON.Object}) = Base.SizeUnknown()
+Base.IteratorEltype(::Type{JSON.Object}) = Base.EltypeUnknown()
 
 
 # Access
@@ -15,12 +15,12 @@ function Base.getindex(o::JSON.Object, key)
 end
 
 Base.get(o::JSON.Object, key, default) = _get(o, key, default)
-function _get(o::JSON.Object, key, default)
+function _get(o::JSON.Object{W}, key, default) where W
     i, c = get_ic(o, key, (0, 0x00))
     if i == 0
         return default
     end
-    return getvalue(o.s, i, c)
+    return getvalue(W, o.s, i, c)
 end
 
 
@@ -32,7 +32,7 @@ Base.length(a::JSON.Object) = div(collection_length(a), 2)
 # Iterate
 
 Base.iterate(j::JSON.Object, i = (j.i, 0x00)) = _iterate(j, i)
-function _iterate(j::JSON.Object, (i, c))
+function _iterate(j::JSON.Object{W}, (i, c)) where W
 
     i, c = nextindex(j, i, c)
 
@@ -40,9 +40,9 @@ function _iterate(j::JSON.Object, (i, c))
         return nothing
     end
 
-    k = getvalue(j.s, i, c)
+    k = getvalue(W, j.s, i, c)
     i, c = nextindex(j, i, c)
-    v = getvalue(j.s, i, c)
+    v = getvalue(W, j.s, i, c)
 
     return k => v, (i, c)
 end
@@ -52,8 +52,8 @@ end
 
 Base.convert(::Type{Any}, o::JSON.Object) = o
 
-Base.convert(::Type{JSON.Object{T}},
-                 o::JSON.Object{T}) where T <: AbstractString = o
+Base.convert(::Type{JSON.Object{W, T}},
+                 o::JSON.Object{W, T}) where W where T <: AbstractString = o
 
 Base.convert(::Type{T}, o::JSON.Object) where T <: AbstractDict = T(o)
 
@@ -92,14 +92,14 @@ end
 Get a `field` from a `JSON.Object` starting at `start_i`.
 Returns `start_i` for next field and field value.
 """
-function get_field(o::JSON.Object, field, start_i)
+function get_field(o::JSON.Object{W}, field, start_i) where W
     i, c = get_ic(o, field, (0, 0x00), start_i)
     if i == 0
         #throw(KeyError(field))
         v = nothing
         i = start_i
     else
-        v = getvalue(o.s, i, c)
+        v = getvalue(W, o.s, i, c)
         i = lastindex_of_value(o.s, i, c)
     end
     return i, v
@@ -108,11 +108,11 @@ end
 
 # IOString Wrappers
 
-Base.length(j::JSON.Object{IOString{T}}) where T =
+Base.length(j::JSON.Object{W, IOString{T}}) where W where T =
     pump(() -> div(collection_length(j), 2), j.s)
 
-Base.get(j::JSON.Object{IOString{T}}, key, default) where T =
+Base.get(j::JSON.Object{W, IOString{T}}, key, default) where W where T =
     pump(() -> _get(j, key, default), j.s)
 
-Base.iterate(j::JSON.Object{IOString{T}}, i = (j.i, 0x00)) where T =
+Base.iterate(j::JSON.Object{W, IOString{T}}, i = (j.i, 0x00)) where W where T =
     pump(() -> _iterate(j, i), j.s)

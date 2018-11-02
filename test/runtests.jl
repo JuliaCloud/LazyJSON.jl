@@ -95,9 +95,7 @@ j = LazyJSON.value("""{
         {"a": 2, "b": false},
         {"a": 3, "b": null}
     ]
-}""")
-
-if LazyJSON.enable_getproperty
+}""", getproperty=true)
 
 @test j isa JSON.Object || j isa JSON.PropertyDict
 @test j.f.a == 1
@@ -111,8 +109,6 @@ if LazyJSON.enable_getproperty
 @test j.ov[2].b == false
 @test j.ov[3].a == 3
 @test j.ov[3].b == nothing
-
-end
 
 
 v = convert(Bar, j)

@@ -54,6 +54,10 @@ syntax.
 
 e.g.
 ```julia
+julia> j = LazyJSON.value("""{
+           "foo": [1, 2, 3, "four"]
+           "bar": null
+       }"""; getproperty=true)
 julia> j.foo
 4-element LazyJSON.Array:
  1

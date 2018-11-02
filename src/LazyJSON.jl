@@ -9,18 +9,9 @@ using Base: @propagate_inbounds
 
 const JSON = LazyJSON
 
-const enable_getproperty = true
-
 include("SplicedStrings.jl")            ; using .SplicedStrings: SplicedString
 include("PropertyDicts.jl")             ; using .PropertyDicts: PropertyDict
 include("IOStrings.jl")                 ; using .IOStrings: IOString, pump
-
-
-@static if enable_getproperty
-    wrap_object(o) = PropertyDict(o)
-else
-    wrap_object(o) = o
-end
 
 
 # JSON Value Types
@@ -54,18 +45,21 @@ struct Number{T <: AbstractString} <: Base.Real
     i::Int
 end
 
-struct Object{T <: AbstractString} <: AbstractDict{AbstractString, Any}
+struct Object{W, T <: AbstractString} <: AbstractDict{AbstractString, Any}
     s::T
     i::Int
 end
 
-struct Array{T <: AbstractString}  <: AbstractArray{Any, 1}
+struct Array{W, T <: AbstractString}  <: AbstractArray{Any, 1}
     s::T
     i::Int
 end
 
 const Value = Union{JSON.String, JSON.Number, JSON.Object, JSON.Array}
 const Collection = Union{JSON.Object, JSON.Array}
+
+Object(W, s::T, i) where T = Object{W, T}(s, i)
+Array(W, s::T, i) where T = Array{W, T}(s, i)
 
 """
 Verbatim JSON text of a `JSON.Value`
@@ -85,6 +79,10 @@ jsonstring(x) = JSONjl.JSON.json(x)
 Replace value `v` with `x`.
 """
 splice(j::JSON.Value, v::JSON.Value, x) = value(splice(j.s, v.i, x, j.i))
+
+splice(j::Union{JSON.Object{PropertyDict},
+                JSON.Array{PropertyDict}}, v::JSON.Value, x) =
+    value(splice(j.s, v.i, x, j.i); getproperty=true)
 
 splice(j::JSON.Value, path::Vector, x) =
     value(splice(j.s, getpath(j.s, path, j.i)[1], x, j.i))
@@ -112,7 +110,8 @@ const SupportedString = Union{IOString,
 
 Create a `JSON.Value` object from a JSON text.
 """
-function value(s::SupportedString, path=nothing, i = 1; lazy=true)
+function value(s::SupportedString, path=nothing, i = 1;
+               lazy=true, getproperty=false)
 
     # Check that the string has a C-style termination characer.
     @assert (c = getc(s, ncodeunits(s) + 1); c == 0x00 || c == IOStrings.ASCII_ETB)
@@ -121,7 +120,8 @@ function value(s::SupportedString, path=nothing, i = 1; lazy=true)
     if path != nothing
         i, c = getpath(s, path, i, c)
     end
-    v = getvalue(s, i, c)
+    W = getproperty ? PropertyDict : Nothing
+    v = getvalue(W, s, i, c)
     return lazy ? v : flatten(v)
 end
 
@@ -146,8 +146,8 @@ IOStrings.recoverable(e::JSON.ParseError) = e.c == IOStrings.ASCII_ETB
 
 Base.string(j::Union{JSON.String{T},
                      JSON.Number{T},
-                     JSON.Object{T},
-                     JSON.Array{T}}) where T <: IOString =
+                     JSON.Object{W, T},
+                     JSON.Array{W, T}}) where W where T <: IOString =
     pump(() -> SubString(j.s, j.i, lastindex_of_value(j.s, j.i)), j.s)
 
 
@@ -157,9 +157,10 @@ Get a JSON value object for a value in a JSON text.
  - `i`, byte index of the value in JSON text.
  - `c`, first byte of the value.
 """
-function getvalue(s, i, c=getc(s, i))
-        if c == '{'                     wrap_object(JSON.Object(s, i))
-    elseif c == '['                     JSON.Array(s, i)
+function getvalue(W, s, i, c=getc(s, i))
+        if c == '{'                     o = JSON.Object(W, s, i)
+                                        W === Nothing ? o : W(o)
+    elseif c == '['                     JSON.Array(W, s, i)
     elseif c == '"'                     JSON.String(s, i)
     elseif isnum(c)                     JSON.Number(s, i)
     elseif c == 'f'                     false
@@ -372,9 +373,9 @@ function getpath(s, path, i::Int=1, c::UInt8=getc(s, i))
 
     for key in path
         if c == '[' && key isa Integer
-            i, c = getindex_ic(JSON.Array(s, i), key)
+            i, c = getindex_ic(JSON.Array(Nothing, s, i), key)
         elseif c == '{' && key isa AbstractString
-            i, c = get_ic(JSON.Object(s, i), key, (0, 0x00))
+            i, c = get_ic(JSON.Object(Nothing, s, i), key, (0, 0x00))
             if i == 0
                 throw(KeyError(key))
             end

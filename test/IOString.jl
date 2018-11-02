@@ -161,7 +161,7 @@ end
 
     @sync begin
         t = @async begin
-            v = LazyJSON.value(io)
+            v = LazyJSON.value(io, getproperty=true)
             push!(log, v.id)
             push!(log, v.owner.login)
             push!(log, v.private)
