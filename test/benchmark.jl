@@ -51,6 +51,26 @@ name(::Type{TestLazyC}) = "Lazy (C)"
 name(::Type{TestJSON}) = "JSON"
 name(::Type{TestJSON2}) = "JSON2"
 
+
+println("""
+    For these tests, the content of `ec2-2016-11-15.normal.json` has been
+    duplicated 10 times into a top level JSON array "[ , , , ...]" this
+    results in an overall input data size of ~10MB.
+
+    ## test1
+    Reads `ec2-2016-11-15.normal.json` and extracts a single value:
+    `operations.AcceptReservedInstancesExchangeQuote.input.shape`.
+    This value is close to the start of the input data.
+
+    Variants:
+     - Lazy: LazyJSON.jl `AbstractDict` interface.
+     - Lazy (B): LazyJSON.jl `getproperty` interface.
+     - Lazy (C): LazyJSON.jl `lazy=false` (parse whole input to Dicts etc)
+     - JSON: JSON.jl `parse` interface.
+     - JSON2: JSON2.jl `read -> NamedTuple` interface.
+
+    """)
+
 test1(::Type{TestLazyA}, j) =
     LazyJSON.parse(j)[1]["operations"
                     ]["AcceptReservedInstancesExchangeQuote"
@@ -122,7 +142,29 @@ for warmup in [true, false]
     end
 end
 
+println("```")
 @show results
+println("```\n")
+println("""
+    Note: LazyJSON.jl is similar to JSON.jl in speed and memory use in non-lazy mode.
+
+    """)
+results = results[1:0,:]
+
+
+println("""
+    ## test2
+    Read `ec2-2016-11-15.normal.json` and extracts an array value:
+    `shapes.scope.enum`
+    This value is close to the end of the input data.
+
+    Variants:
+     - Lazy: LazyJSON.jl `AbstractDict` interface.
+     - Lazy (B): LazyJSON.jl `getproperty` interface.
+     - Lazy (C): LazyJSON.jl `lazy=false` (parse whole input to Dicts etc)
+     - JSON: JSON.jl `parse` interface.
+     - JSON2: JSON2.jl `read -> NamedTuple` interface.
+    """)
 
 
 test2(::Type{TestLazyA}, j) =
@@ -166,7 +208,28 @@ for warmup in [true, false]
     end
 end
 
+println("```")
 @show results
+println("```\n")
+println("""
+    Note: It takes LazyJSON.jl a bit longer to access values near the end of
+    the input.
+
+    """)
+
+results = results[1:0,:]
+
+println("""
+    ## test3
+    Modifes `ec2-2016-11-15.normal.json` by replacing a value near the
+    start of the file and two values near the end.
+
+    Variants:
+     - Lazy: LazyJSON.jl `getproperty` interface finds values and
+             `LazyJSON.splice` modifies the JSON data in-place.
+     - JSON: JSON.jl `parse` to `Dict`, modify, then write new JSON text.
+     - JSON2: _Parses to immutable `NamedTuples`. Modificaiton not supported._
+    """)
 
 function test3(::Type{TestLazyA}, j)
     r = LazyJSON.value(j; getproperty=true)
@@ -215,7 +278,28 @@ for warmup in [true, false]
     end
 end
 
+println("```")
 @show results
+println("```\n")
+results = results[1:0,:]
+
+println("""
+    ## test4
+    Reads a 1.2MB GeoJSON file an extracts a country name near the middle
+    of the file.
+
+    Variants:
+     - Lazy: LazyJSON.jl `AbstractDict` interface.
+       `LazyJSON.parse(j)["features"][15]["properties"]["formal_en"]`
+     - Lazy (B): LazyJSON.jl `getproperty` interface.
+       `LazyJSON.parse(j; getproperty=true).features[15].properties.formal_en`
+     - Lazy (C): LazyJSON.jl `lazy=false` (parse whole input to Dicts etc)
+       `LazyJSON.parse(j; lazy=false)["features"][15]["properties"]["formal_en"]`
+     - JSON: JSON.jl `parse` interface.
+       `JSON.parse(j)["features"][15]["properties"]["formal_en"]`
+     - JSON2: JSON2.jl `read -> NamedTuple` interface.
+       `JSON2.read(j).features[15].properties.formal_en`
+    """)
 
 test4(::Type{TestLazyA}, j) =
     LazyJSON.parse(j)["features"][15]["properties"]["formal_en"]
@@ -264,7 +348,31 @@ for warmup in [true, false]
     end
 end
 
+println("```")
 @show results
+println("```\n")
+
+println("""
+    Note: LazyJSON.jl in non-lazy mode is a bit faster than JSON.jl for this
+    input.
+
+    """)
+
+results = results[1:0,:]
+
+println("""
+    ## test5
+    Reads a 1.2MB GeoJSON file and checks that the outline polygon for
+    a single country is within an expected lat/lon range.
+    ```
+    r = r["features"][15]["geometry"]["coordinates"][6][1]
+    @assert r[1][1] == 134.41651451900023
+    for (x, y) in r
+       @assert 134.2 < x < 134.5
+       @assert 7.21 < y < 7.32
+    end
+    ```
+    """)
 
 function test5(::Type{TestLazyA}, j)
     r = LazyJSON.parse(j)
@@ -319,7 +427,27 @@ for warmup in [true, false]
         run_test5(t, j2; warmup=warmup)
     end
 end
+
+println("```")
 @show results
+println("```\n")
+results = results[1:0,:]
+
+println("""
+    ## test6
+    Defines `struct Operation`, `struct IOType` and `struct HTTP` with
+    fields that match the API operations data in `ec2-2016-11-15.normal.json`.
+    It then does JSON2-style direct-to-struct parsing to read the JSON data
+    into a Julia object `Dict{String,Operation}`
+    (LazyJSON provides `@generated` `Base.convert` methods for this).
+
+    Variants:
+     - Lazy: LazyJSON.jl `AbstractDict` interface.
+        `convert(Dict{String,Operation}, LazyJSON.parse(j))`
+     - JSON2: JSON2.jl `read -> NamedTuple` interface.
+        `JSON2.read(j, Dict{String,Operation})`
+    """)
+
 
 function test6(::Type{TestLazyA}, j)
     v = convert(Dict{String,Operation}, LazyJSON.parse(j))
@@ -360,5 +488,7 @@ for warmup in [true, false]
     end
 end
 display(results)
-println()
+println("```")
+@show results
+println("```\n")
 #end
