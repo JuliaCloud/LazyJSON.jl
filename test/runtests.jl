@@ -3,6 +3,8 @@ using Test
 
 using DataStructures
 
+using JSON2
+
 module JSON_jl
     using JSON
 end
@@ -10,6 +12,25 @@ const JSON = LazyJSON
 
 include("SplicedStrings.jl")
 
+
+const parsers = [
+    ("LazyJSON.jl", x->LazyJSON.parse(x)),
+    ("JSON.jl", x->JSON_jl.JSON.parse(x)),
+    ("JSON2.jl", x->JSON2.read(x))
+]
+
+const non_lazy_parsers = [
+    ("LazyJSON.jl", x->LazyJSON.parse(x; lazy=false)),
+    ("JSON.jl", x->JSON_jl.JSON.parse(x)),
+    ("JSON2.jl", x->JSON2.read(x))
+]
+
+const COMPARE_JSON_JL = false
+
+if !COMPARE_JSON_JL
+    parsers = parsers[1:1]
+    non_lazy_parsers = non_lazy_parsers[1:1]
+end
 
 struct Foo
     a::Int
@@ -201,14 +222,18 @@ end # testset
 
 j = String(read("json_checker.json"))
 
-v = JSON.parse(j)
+for (n, f) in parsers @testset "http://www.json.org/JSON_checker.$n" begin
+
+try
+
+v = f(j)
 
 @test v[1] == "JSON Test Pattern pass1"
 @test v[2]["object with 1 member"][1] == "array with 1 element"
 @test length(v[3]) == 0
-@test v[3] isa JSON.Object || v[3] isa JSON.PropertyDict
+@test v[3] isa JSON.Object || v[3] isa JSON.PropertyDict || v[3] isa Dict
 @test [x for x in v[4]] == Any[]
-@test v[4] isa JSON.Array
+@test v[4] isa JSON.Array || v[4] isa Array
 @test v[5] == -42
 @test v[6]
 @test !v[7]
@@ -257,6 +282,12 @@ v = JSON.parse(j)
 @test v[19] == 2e-00
 @test v[20] == "rosebud"
 
+catch e
+    @warn "$n: $e"
+end
+
+end # testset
+end # for loop
 
 end # testset
 
@@ -317,7 +348,7 @@ end # testset
 @testset "github.com/nst/JSONTestSuite" begin
 #-------------------------------------------------------------------------------
 
-jparse(x) = JSON.parse(x; lazy=false)
+for (n, jparse) in non_lazy_parsers @testset "github.com/nst/JSONTestSuite.$n" begin
 
 @test jparse("[123.456e-789]") == Any[BigFloat("1.23456e-787")] # i_number_double_huge_neg_exp.json
 @test jparse("[0.4e00669999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999969999999006]") == Any[Inf] # i_number_huge_exp.json
@@ -329,7 +360,7 @@ jparse(x) = JSON.parse(x; lazy=false)
 @test jparse("[-123123123123123123123123123123]") == Any[-123123123123123123123123123123] # i_number_too_big_neg_int.json
 @test jparse("[100000000000000000000]") == Any[100000000000000000000] # i_number_too_big_pos_int.json
 @test jparse("[-237462374673276894279832749832423479823246327846]") == Any[-237462374673276894279832749832423479823246327846] # i_number_very_big_negative_int.json
-@test jparse("{\"\\uDFAA\":0}") == DataStructures.OrderedDict{SubString{String},Any}("\udfaa"=>0) # i_object_key_lone_2nd_surrogate.json
+@test jparse("{\"\\uDFAA\":0}") == Dict("\udfaa"=>0) # i_object_key_lone_2nd_surrogate.json
 @test jparse("[\"\\uDADA\"]") == Any["\udada"] # i_string_1st_surrogate_but_2nd_missing.json
 @test jparse("[\"\\uD888\\u1234\"]") == Any["\ud888ሴ"] # i_string_1st_valid_surrogate_2nd_invalid.json
 @test jparse("[\"日ш\xfa\"]") == Any["日ш\xfa"] # i_string_UTF-8_invalid_sequence.json
@@ -447,6 +478,8 @@ c = String(UInt8[ 0xf4, 0xbf, 0xbf, 0xbf])
 @test jparse("[true]") == Any[true] # y_structure_true_in_array.json
 @test jparse(" [] ") == Any[] # y_structure_whitespace_array.json
 
+end
+end
 end # testset
 
 
