@@ -65,9 +65,9 @@ function parse_number(s, i)
     end
 
     # int
-    while c in UInt8('0'):UInt8('9')
+    while (decimal = c - UInt8('0')) < 0x10
         end_i = i
-        v = 10v + decimal(c)
+        v = 10v + decimal
         if v < 0
             i = lastindex_of_number(s, i)     # If v overflows, give up
             ss = SubString(s, start_i, i)     # and try larger types...
@@ -88,9 +88,9 @@ function parse_number(s, i)
         f = Int64(0)
         d = 1
         i, c = next_ic(s, i)
-        while c in UInt8('0'):UInt8('9')
+        while (decimal = c - UInt8('0')) < 0x10
             end_i = i
-            f = 10f + decimal(c)
+            f = 10f + decimal
             d *= 10
             if d > 10 ^ 15
                 i = lastindex_of_number(s, i) # If there is too much precision
@@ -130,9 +130,6 @@ function parse_number(s, i)
 
     return v, end_i
 end
-
-decimal(c) = c - UInt8('0')
-
 
 Base.Number(n::JSON.Number) = convert(Base.Number, n)
 
