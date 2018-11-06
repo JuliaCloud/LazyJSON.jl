@@ -65,7 +65,7 @@ function parse_number(s, i)
     end
 
     # int
-    while (decimal = c - UInt8('0')) < UInt(10)
+    while (decimal = c - UInt8('0')) < UInt8(10)
         end_i = i
         v = 10v + decimal
         if v < 0
