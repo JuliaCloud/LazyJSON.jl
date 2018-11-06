@@ -101,7 +101,8 @@ rfc_example = """
 """
 
 @testset "pr_3" begin
-@test LazyJSON.value("1f") == 1
+@test Int(LazyJSON.value("1:")) == 1 # FIXME Lazy Int parsing stops at
+                                     #       non-digit. But maybe should error.
 end
 
 
