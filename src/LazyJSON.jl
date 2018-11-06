@@ -9,6 +9,12 @@ using Base: @propagate_inbounds
 
 const JSON = LazyJSON
 
+const LAZY_WARN = false
+macro lazywarn(a...)
+    LAZY_WARN ? :(@warn $(esc(a))...) :
+                :()
+end
+
 include("SplicedStrings.jl")            ; using .SplicedStrings: SplicedString
 include("PropertyDicts.jl")             ; using .PropertyDicts: PropertyDict
 include("IOStrings.jl")                 ; using .IOStrings: IOString, pump

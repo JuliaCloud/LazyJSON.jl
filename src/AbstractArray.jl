@@ -1,7 +1,7 @@
 # AbstractArray interface for JSON.Array
 
-Base.IteratorSize(::Type{JSON.Array}) = Base.SizeUnknown()
-Base.IteratorEltype(::Type{JSON.Array}) = Base.EltypeUnknown()
+Base.IteratorSize(::Type{JSON.Array{W, T}}) where W where T = Base.SizeUnknown()
+Base.IteratorEltype(::Type{JSON.Array{W, T}}) where W where T = Base.EltypeUnknown()
 
 
 # Access
@@ -12,7 +12,10 @@ Base.getindex(a::JSON.Array{W}, i::Integer) where W =
 
 # Dimensions
 
-Base.length(a::JSON.Array) = collection_length(a)
+function Base.length(a::JSON.Array)
+    @lazywarn "length(::JSON.Array) is slow!" stacktrace()
+    collection_length(a)
+end
 
 Base.size(a::JSON.Array) = (length(a), )
 

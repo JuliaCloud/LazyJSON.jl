@@ -1,7 +1,7 @@
 # AbstractDict interface for JSON Object
 
-Base.IteratorSize(::Type{JSON.Object}) = Base.SizeUnknown()
-Base.IteratorEltype(::Type{JSON.Object}) = Base.EltypeUnknown()
+Base.IteratorSize(::Type{JSON.Object{W, T}}) where W where T = Base.SizeUnknown()
+Base.IteratorEltype(::Type{JSON.Object{W, T}}) where W where T = Base.EltypeUnknown()
 
 
 # Access
