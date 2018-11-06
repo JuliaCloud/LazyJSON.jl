@@ -65,7 +65,7 @@ function parse_number(s, i)
     end
 
     # int
-    while (decimal = c - UInt8('0')) < 0x10
+    while (decimal = c - UInt8('0')) < 10
         end_i = i
         v = 10v + decimal
         if v < 0
@@ -88,7 +88,7 @@ function parse_number(s, i)
         f = Int64(0)
         d = 1
         i, c = next_ic(s, i)
-        while (decimal = c - UInt8('0')) < 0x10
+        while (decimal = c - UInt8('0')) < 10
             end_i = i
             f = 10f + decimal
             d *= 10
