@@ -146,7 +146,7 @@ Base.UInt128(n::JSON.Number)::UInt128 = Base.Number(n)
 Base.BigInt(n::JSON.Number)::BigInt = Base.Number(n)
 Base.Float64(n::JSON.Number)::Float64 = Base.Number(n)
 Base.BigFloat(n::JSON.Number)::BigFloat = Base.Number(n)
-
+Base.AbstractFloat(n::JSON.Number)::AbstractFloat = Base.Number(n)
 
 import Base: +, -, *, /, ^
 +(a::T, b::T) where {T <: JSON.Number} = Base.Number(a) + Base.Number(b)
