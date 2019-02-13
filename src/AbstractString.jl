@@ -303,7 +303,7 @@ end
     return next_continued(s, i, u)
 end
 
-function Base.next_continued(s::IOString, i::Int, u::UInt32)
+function next_continued(s::IOString, i::Int, u::UInt32)
     u < 0xc0000000 && (i += 1; @goto ret)
     n = ncodeunits(s)
     # first continuation byte
