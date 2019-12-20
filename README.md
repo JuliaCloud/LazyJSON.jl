@@ -1,6 +1,6 @@
 # LazyJSON.jl
 
-[![Build Status](https://travis-ci.org/samoconnor/LazyJSON.jl.svg)](https://travis-ci.org/samoconnor/LazyJSON.jl) [![LazyJSON](http://pkg.julialang.org/badges/LazyJSON_0.7.svg)](http://pkg.julialang.org/detail/LazyJSON)
+[![Build Status](https://travis-ci.org/JuliaCloud/LazyJSON.jl.svg)](https://travis-ci.org/JuliaCloud/LazyJSON.jl)
 
 
 LazyJSON is an interface for reading JSON data in Julia programs.
