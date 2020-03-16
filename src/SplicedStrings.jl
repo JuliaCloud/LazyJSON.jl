@@ -61,11 +61,6 @@ function splice_item(ss::SubString{SplicedString})
                 [SubString(j_f, 1, j_i)])
 end
 
-
-#https://github.com/JuliaLang/julia/issues/26200
-Base.promote_rule(::Type{<:AbstractString},
-                  ::Type{<:AbstractString}) = AbstractString
-
 #https://github.com/JuliaLang/julia/issues/26202
 Base.nextind(s::SubString{SplicedString}, i::Int) = nextind(s.string, i)
 Base.prevind(s::SubString{SplicedString}, i::Int) = prevind(s.string, i)
