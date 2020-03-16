@@ -4,13 +4,13 @@ license = "MIT"
 version = "0.2.0"
 
 [deps]
-DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 
 [compat]
-DataStructures = "0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17"
 JSON = "0.18, 0.19, 0.20, 0.21"
 JSON2 = "0.1, 0.2, 0.3"
+OrderedCollections = "1"
 julia = "1"
 
 [extras]

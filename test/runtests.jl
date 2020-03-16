@@ -1,7 +1,6 @@
 using LazyJSON
+using OrderedCollections: OrderedDict
 using Test
-
-using DataStructures
 
 using JSON2
 
@@ -391,7 +390,7 @@ c = String(UInt8[ 0xf4, 0xbf, 0xbf, 0xbf])
 @test jparse("[]") == Any[] # y_array_empty.json
 @test jparse("[\"a\"]") == Any["a"] # y_array_ending_with_newline.json
 @test jparse("[false]") == Any[false] # y_array_false.json
-@test jparse("[null, 1, \"1\", {}]") == Any[nothing, 1, "1", DataStructures.OrderedDict{SubString{String},Any}()] # y_array_heterogeneous.json
+@test jparse("[null, 1, \"1\", {}]") == Any[nothing, 1, "1", OrderedDict{SubString{String},Any}()] # y_array_heterogeneous.json
 @test jparse("[null]") == Any[nothing] # y_array_null.json
 @test jparse("[1\n]") == Any[1] # y_array_with_1_and_newline.json
 @test jparse(" [1]") == Any[1] # y_array_with_leading_space.json
@@ -416,18 +415,18 @@ c = String(UInt8[ 0xf4, 0xbf, 0xbf, 0xbf])
 @test jparse("[1e+2]") == Any[100.0] # y_number_real_pos_exponent.json
 @test jparse("[123]") == Any[123] # y_number_simple_int.json
 @test jparse("[123.456789]") == Any[123.456789] # y_number_simple_real.json
-@test jparse("{\"asd\":\"sdf\", \"dfg\":\"fgh\"}") == DataStructures.OrderedDict{SubString{String},Any}("asd"=>"sdf","dfg"=>"fgh") # y_object.json
-@test jparse("{\"asd\":\"sdf\"}") == DataStructures.OrderedDict{SubString{String},Any}("asd"=>"sdf") # y_object_basic.json
-@test jparse("{\"a\":\"b\",\"a\":\"c\"}") == DataStructures.OrderedDict{SubString{String},Any}("a"=>"c") # y_object_duplicated_key.json
-@test jparse("{\"a\":\"b\",\"a\":\"b\"}") == DataStructures.OrderedDict{SubString{String},Any}("a"=>"b") # y_object_duplicated_key_and_value.json
-@test jparse("{}") == DataStructures.OrderedDict{SubString{String},Any}() # y_object_empty.json
-@test jparse("{\"\":0}") == DataStructures.OrderedDict{SubString{String},Any}(""=>0) # y_object_empty_key.json
-@test jparse("{\"foo\\u0000bar\": 42}") == DataStructures.OrderedDict{SubString{String},Any}("foo\0bar"=>42) # y_object_escaped_null_in_key.json
-@test jparse("{ \"min\": -1.0e+28, \"max\": 1.0e+28 }") == DataStructures.OrderedDict{SubString{String},Any}("min"=>-1.0e28,"max"=>1.0e28) # y_object_extreme_numbers.json
-@test jparse("{\"x\":[{\"id\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}], \"id\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}") == DataStructures.OrderedDict{SubString{String},Any}("x"=>Any[DataStructures.OrderedDict{SubString{String},Any}("id"=>"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")],"id"=>"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") # y_object_long_strings.json
-@test jparse("{\"a\":[]}") == DataStructures.OrderedDict{SubString{String},Any}("a"=>Any[]) # y_object_simple.json
-@test jparse("{\"title\":\"\\u041f\\u043e\\u043b\\u0442\\u043e\\u0440\\u0430 \\u0417\\u0435\\u043c\\u043b\\u0435\\u043a\\u043e\\u043f\\u0430\" }") == DataStructures.OrderedDict{SubString{String},Any}("title"=>"Полтора Землекопа") # y_object_string_unicode.json
-@test jparse("{\n\"a\": \"b\"\n}") == DataStructures.OrderedDict{SubString{String},Any}("a"=>"b") # y_object_with_newlines.json
+@test jparse("{\"asd\":\"sdf\", \"dfg\":\"fgh\"}") == OrderedDict{SubString{String},Any}("asd"=>"sdf","dfg"=>"fgh") # y_object.json
+@test jparse("{\"asd\":\"sdf\"}") == OrderedDict{SubString{String},Any}("asd"=>"sdf") # y_object_basic.json
+@test jparse("{\"a\":\"b\",\"a\":\"c\"}") == OrderedDict{SubString{String},Any}("a"=>"c") # y_object_duplicated_key.json
+@test jparse("{\"a\":\"b\",\"a\":\"b\"}") == OrderedDict{SubString{String},Any}("a"=>"b") # y_object_duplicated_key_and_value.json
+@test jparse("{}") == OrderedDict{SubString{String},Any}() # y_object_empty.json
+@test jparse("{\"\":0}") == OrderedDict{SubString{String},Any}(""=>0) # y_object_empty_key.json
+@test jparse("{\"foo\\u0000bar\": 42}") == OrderedDict{SubString{String},Any}("foo\0bar"=>42) # y_object_escaped_null_in_key.json
+@test jparse("{ \"min\": -1.0e+28, \"max\": 1.0e+28 }") == OrderedDict{SubString{String},Any}("min"=>-1.0e28,"max"=>1.0e28) # y_object_extreme_numbers.json
+@test jparse("{\"x\":[{\"id\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}], \"id\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}") == OrderedDict{SubString{String},Any}("x"=>Any[OrderedDict{SubString{String},Any}("id"=>"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")],"id"=>"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") # y_object_long_strings.json
+@test jparse("{\"a\":[]}") == OrderedDict{SubString{String},Any}("a"=>Any[]) # y_object_simple.json
+@test jparse("{\"title\":\"\\u041f\\u043e\\u043b\\u0442\\u043e\\u0440\\u0430 \\u0417\\u0435\\u043c\\u043b\\u0435\\u043a\\u043e\\u043f\\u0430\" }") == OrderedDict{SubString{String},Any}("title"=>"Полтора Землекопа") # y_object_string_unicode.json
+@test jparse("{\n\"a\": \"b\"\n}") == OrderedDict{SubString{String},Any}("a"=>"b") # y_object_with_newlines.json
 @test jparse("[\"\\u0060\\u012a\\u12AB\"]") == Any["`Īካ"] # y_string_1_2_3_bytes_UTF-8_sequences.json
 @test jparse("[\"\\uD801\\udc37\"]") == Any["𐐷"] # y_string_accepted_surrogate_pair.json
 @test jparse("[\"\\ud83d\\ude39\\ud83d\\udc8d\"]") == Any["😹💍"] # y_string_accepted_surrogate_pairs.json
