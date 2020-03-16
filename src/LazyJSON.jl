@@ -4,7 +4,7 @@ module JSONjl
     using JSON
 end
 
-using DataStructures: OrderedDict
+using OrderedCollections: OrderedDict
 using Base: @propagate_inbounds
 
 const JSON = LazyJSON
