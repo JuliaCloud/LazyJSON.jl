@@ -1,5 +1,7 @@
 module LazyJSON
 
+using PropertyDicts: PropertyDict
+
 module JSONjl
     using JSON
 end
@@ -16,7 +18,6 @@ macro lazywarn(a...)
 end
 
 include("SplicedStrings.jl")            ; using .SplicedStrings: SplicedString
-include("PropertyDicts.jl")             ; using .PropertyDicts: PropertyDict
 include("IOStrings.jl")                 ; using .IOStrings: IOString, pump
 
 

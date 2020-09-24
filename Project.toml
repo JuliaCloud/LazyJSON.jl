@@ -1,16 +1,18 @@
 name = "LazyJSON"
 uuid = "fc18253b-5e1b-504c-a4a2-9ece4944c004"
 license = "MIT"
-version = "0.2.1"
+version = "0.2.2"
 
 [deps]
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+PropertyDicts = "f8a19df8-e894-5f55-a973-672c1158cbca"
 
 [compat]
 JSON = "0.18, 0.19, 0.20, 0.21"
 JSON2 = "0.1, 0.2, 0.3"
 OrderedCollections = "1"
+PropertyDicts = "0.1"
 julia = "1"
 
 [extras]
