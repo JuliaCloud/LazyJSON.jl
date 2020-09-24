@@ -1,6 +1,6 @@
 module LazyJSON
 
-using PropertyDicts
+using PropertyDicts: PropertyDict
 
 module JSONjl
     using JSON
