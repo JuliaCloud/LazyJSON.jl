@@ -174,7 +174,7 @@ function getvalue(W, s, i, c=getc(s, i))
     elseif c == 'n'                     nothing
     elseif c == 't'                     true
     else
-        throw(JSON.ParseError(s, i, c, "invalid value index"))
+        throw_parse_invalididx(s, i, c)
     end
 end
 
@@ -214,7 +214,7 @@ function getflat(s, i, c = getc(s, i))
     elseif c == 'n'                     nothing, next_i(s, i, 3)
     elseif c == 't'                     true, next_i(s, i, 3)
     else
-        throw(JSON.ParseError(s, i, c, "invalid value index"))
+        throw_parse_invalididx(s, i, c)
     end
 end
 
@@ -278,7 +278,7 @@ function nextindex(j, i, c)
     end
     i, c = skip_noise(j.s, i)
     if c == IOStrings.ASCII_ETB
-        throw(JSON.ParseError(j.s, i, c, "input incomplete"))
+        throw_parse_incomplete(s, i, c)
     end
     return i, c
 end
@@ -416,7 +416,7 @@ function lastindex_of_token(s, i, c)::Int
     elseif c == 'n'                     next_i(s, i, 3)
     elseif c == 't'                     next_i(s, i, 3)
     else
-        throw(JSON.ParseError(s, i, c, "invalid input"))
+        throw_parse_invalidipt(s, i, c)
     end
 end
 
@@ -482,7 +482,7 @@ function scan_string(s, i)
     has_escape = false
     while c != '"'
         if isnull(c) || c == IOStrings.ASCII_ETB
-            throw(JSON.ParseError(s, i, c, "input incomplete"))
+            throw_parse_incomplete(s, i, c)
         end
         escape = c == '\\'
         i, c = next_ic(s, i)
@@ -506,7 +506,7 @@ function lastindex_of_number(s, i)::Int
 
     while !isnull(c) && !isnoise(c) && !isend(c)
         if c == IOStrings.ASCII_ETB
-            throw(JSON.ParseError(s, i, c, "input incomplete"))
+            throw_parse_incomplete(s, i, c)
         end
         last = i
         i, c = next_ic(s, i)
@@ -661,7 +661,10 @@ function Base.show(io::IO, e::JSON.ParseError)
               lpad("", col_number - 1, " "), "^")
 end
 
-
+# Outlined error functions
+@noinline throw_parse_incomplete(s, i, c) = throw(JSON.ParseError(s, i, c, "input incomplete"))
+@noinline throw_parse_invalididx(s, i, c) = throw(JSON.ParseError(s, i, c, "invalid value index"))
+@noinline throw_parse_invalidipt(s, i, c) = throw(JSON.ParseError(s, i, c, "invalid input"))
 
 # Interface Protocols
 
