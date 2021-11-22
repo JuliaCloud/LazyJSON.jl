@@ -3,12 +3,11 @@
 [![Build Status](https://travis-ci.org/JuliaCloud/LazyJSON.jl.svg)](https://travis-ci.org/JuliaCloud/LazyJSON.jl)
 
 
-LazyJSON is an interface for reading JSON data in Julia programs.
+LazyJSON is an interface for reading JSON data in Julia programs. Note, and please also consider the semi-lazy package JSON3.jl)(https://github.com/quinnj/JSON3.jl).
 
 If you find it useful, or not, please report your experiance in the [discourse thread](https://discourse.julialang.org/t/announce-a-different-way-to-read-json-data-lazyjson-jl/9046).
 
-LazyJSON provides direct access to values stored in a JSON text though standard Julia
-interfaces: `Number`, `AbstractString`, `AbstractVector` and `AbstractDict`.
+LazyJSON provides direct access to values stored in a JSON text though standard Julia interfaces: `Number`, `AbstractString`, `AbstractVector` and `AbstractDict`.
 
 The function `LazyJSON.value` constructs an object representing the value(s) of a JSON text.
 
